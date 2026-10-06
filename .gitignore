@@ -14,5 +14,8 @@ __pycache__/
 # the reference runs are committed.
 /results/**/*.npz
 
+# Subset smoke runs are throwaway verification outputs, not reference results.
+/results/*_smoke/
+
 # local scratch probe scripts with machine-specific paths
 scripts/probe_query_calibration.py
