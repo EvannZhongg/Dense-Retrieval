@@ -71,7 +71,7 @@ class OpenAICompatibleProvider(EmbeddingProvider):
                         f"Embedding API returned {len(data)} vectors for {len(texts)} inputs"
                     )
                 return np.asarray([item["embedding"] for item in data], dtype=np.float32)
-            except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as exc:
+            except requests.RequestException as exc:
                 if attempt >= self.max_retries:
                     raise RuntimeError(
                         f"Embedding API failed after {self.max_retries + 1} attempts"

@@ -45,3 +45,15 @@ def test_missing_positive_remains_a_hard_miss_and_oracle_is_unavailable():
     assert frame.loc[0, "failure_group"] == "hard_miss"
     assert pd.isna(frame.loc[0, "best_positive_similarity"])
     assert not bool(oracle.loc[0, "correction_available"])
+
+
+def test_local_nfcorpus_and_scifact_are_beir_compatible():
+    from dense_retrieval.datasets import load_beir_dataset
+
+    for name, expected_queries, expected_documents in (
+        ("nfcorpus", 323, 3633),
+        ("scifact", 300, 5183),
+    ):
+        dataset = load_beir_dataset(name, "datasets", "test", False)
+        assert len(dataset.queries) == expected_queries
+        assert len(dataset.corpus) == expected_documents

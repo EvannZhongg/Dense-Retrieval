@@ -1,0 +1,215 @@
+[
+  {
+    "dataset": "fiqa",
+    "model": "Qwen3",
+    "split_method": "official FiQA train/test qrels",
+    "cache_dir": "cache\\fiqa\\Qwen__Qwen3-Embedding-0.6B\\e6a4682fb115dcc37051",
+    "train_queries_total": 5500,
+    "train_queries_used_for_subspace": 5500,
+    "train_queries_missing_positive": [],
+    "test_queries_total": 648,
+    "test_queries_with_oracle_delta": 648,
+    "test_queries_missing_positive": [],
+    "train_test_query_id_overlap": 0,
+    "subspace_fit_inputs": "train query-level delta_star only",
+    "test_delta_usage": "projection coefficients only",
+    "ranks": [
+      64,
+      128,
+      256
+    ],
+    "lambdas": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ]
+  },
+  {
+    "dataset": "fiqa",
+    "model": "BGE-M3",
+    "split_method": "official FiQA train/test qrels",
+    "cache_dir": "cache\\fiqa\\BAAI__bge-m3\\eb3840d2f6c5b2d1b8bf",
+    "train_queries_total": 5500,
+    "train_queries_used_for_subspace": 5500,
+    "train_queries_missing_positive": [],
+    "test_queries_total": 648,
+    "test_queries_with_oracle_delta": 648,
+    "test_queries_missing_positive": [],
+    "train_test_query_id_overlap": 0,
+    "subspace_fit_inputs": "train query-level delta_star only",
+    "test_delta_usage": "projection coefficients only",
+    "ranks": [
+      64,
+      128,
+      256
+    ],
+    "lambdas": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ]
+  },
+  {
+    "dataset": "fiqa",
+    "model": "E5",
+    "split_method": "official FiQA train/test qrels",
+    "cache_dir": "cache\\fiqa\\intfloat__e5-base-v2\\0cbdbf5bea302a8d7116",
+    "train_queries_total": 5500,
+    "train_queries_used_for_subspace": 5500,
+    "train_queries_missing_positive": [],
+    "test_queries_total": 648,
+    "test_queries_with_oracle_delta": 648,
+    "test_queries_missing_positive": [],
+    "train_test_query_id_overlap": 0,
+    "subspace_fit_inputs": "train query-level delta_star only",
+    "test_delta_usage": "projection coefficients only",
+    "ranks": [
+      64,
+      128,
+      256
+    ],
+    "lambdas": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ]
+  },
+  {
+    "dataset": "arguana",
+    "model": "Qwen3",
+    "split_method": "stable SHA-256 70/30 split of official ArguAna test queries",
+    "cache_dir": "cache\\arguana\\Qwen__Qwen3-Embedding-0.6B\\20773436739d4d311d2e",
+    "train_queries_total": 984,
+    "train_queries_used_for_subspace": 980,
+    "train_queries_missing_positive": [
+      "test-free-speech-debate-yfsdfkhbwu-con03a",
+      "test-education-ufsdfkhbwu-con03a",
+      "test-politics-dhwem-pro06a",
+      "test-society-asfhwapg-con04a"
+    ],
+    "test_queries_total": 422,
+    "test_queries_with_oracle_delta": 421,
+    "test_queries_missing_positive": [
+      "test-science-sghwbdgmo-con03a"
+    ],
+    "train_test_query_id_overlap": 0,
+    "subspace_fit_inputs": "train query-level delta_star only",
+    "test_delta_usage": "projection coefficients only",
+    "ranks": [
+      64,
+      128,
+      256
+    ],
+    "lambdas": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ]
+  },
+  {
+    "dataset": "arguana",
+    "model": "BGE-M3",
+    "split_method": "stable SHA-256 70/30 split of official ArguAna test queries",
+    "cache_dir": "cache\\arguana\\BAAI__bge-m3\\e5f82074df232c7f3aea",
+    "train_queries_total": 984,
+    "train_queries_used_for_subspace": 980,
+    "train_queries_missing_positive": [
+      "test-free-speech-debate-yfsdfkhbwu-con03a",
+      "test-education-ufsdfkhbwu-con03a",
+      "test-politics-dhwem-pro06a",
+      "test-society-asfhwapg-con04a"
+    ],
+    "test_queries_total": 422,
+    "test_queries_with_oracle_delta": 421,
+    "test_queries_missing_positive": [
+      "test-science-sghwbdgmo-con03a"
+    ],
+    "train_test_query_id_overlap": 0,
+    "subspace_fit_inputs": "train query-level delta_star only",
+    "test_delta_usage": "projection coefficients only",
+    "ranks": [
+      64,
+      128,
+      256
+    ],
+    "lambdas": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ]
+  },
+  {
+    "dataset": "arguana",
+    "model": "E5",
+    "split_method": "stable SHA-256 70/30 split of official ArguAna test queries",
+    "cache_dir": "cache\\arguana\\intfloat__e5-base-v2\\927584646274e7a7bc76",
+    "train_queries_total": 984,
+    "train_queries_used_for_subspace": 980,
+    "train_queries_missing_positive": [
+      "test-free-speech-debate-yfsdfkhbwu-con03a",
+      "test-education-ufsdfkhbwu-con03a",
+      "test-politics-dhwem-pro06a",
+      "test-society-asfhwapg-con04a"
+    ],
+    "test_queries_total": 422,
+    "test_queries_with_oracle_delta": 421,
+    "test_queries_missing_positive": [
+      "test-science-sghwbdgmo-con03a"
+    ],
+    "train_test_query_id_overlap": 0,
+    "subspace_fit_inputs": "train query-level delta_star only",
+    "test_delta_usage": "projection coefficients only",
+    "ranks": [
+      64,
+      128,
+      256
+    ],
+    "lambdas": [
+      0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ]
+  }
+]

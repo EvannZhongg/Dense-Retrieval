@@ -6,6 +6,25 @@ import pandas as pd
 from ..retrieval.exact import exact_search
 
 
+def closest_positive_index(
+    query_id,
+    qrels,
+    query_embedding,
+    document_embeddings,
+    document_index,
+):
+    """Return the available positive with maximum query cosine similarity."""
+    positive_indices = [
+        document_index[str(doc_id)]
+        for doc_id, relevance in qrels[str(query_id)].items()
+        if int(relevance) > 0 and str(doc_id) in document_index
+    ]
+    if not positive_indices:
+        return None
+    similarities = query_embedding @ document_embeddings[positive_indices].T
+    return positive_indices[int(np.argmax(similarities))]
+
+
 def run_oracle_correction(
     query_ids,
     qrels,
@@ -29,8 +48,14 @@ def run_oracle_correction(
             if int(relevance) > 0
         }
         available_relevant_ids = relevant_ids.intersection(document_index)
-        positive_indices = [document_index[doc_id] for doc_id in available_relevant_ids]
-        if not positive_indices:
+        positive_index = closest_positive_index(
+            query_id,
+            qrels,
+            query_embeddings[query_index],
+            document_embeddings,
+            document_index,
+        )
+        if positive_index is None:
             failure_group = "hard_miss"
             for lambda_ in lambdas:
                 row = {
@@ -53,12 +78,9 @@ def run_oracle_correction(
             continue
         original_rank = min(
             int(np.where(baseline_indices[query_index] == index)[0][0]) + 1
-            for index in positive_indices
+            for index in (document_index[doc_id] for doc_id in available_relevant_ids)
         )
-        similarities = (
-            query_embeddings[query_index] @ document_embeddings[positive_indices].T
-        )
-        positive = document_embeddings[positive_indices[int(np.argmax(similarities))]]
+        positive = document_embeddings[positive_index]
 
         for lambda_ in lambdas:
             corrected = query_embeddings[query_index] * (1 - lambda_) + positive * lambda_
