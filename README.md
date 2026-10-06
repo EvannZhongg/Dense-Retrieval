@@ -43,6 +43,8 @@ Replace the `model` block in the YAML with a block from `configs/models.yaml`; s
 
 Outputs are written under `results/<dataset>/<model>/`: `metrics.json`, one-row-per-query `query_metrics.parquet`, `oracle_correction.parquet`, the exact run `config.json`, and a per-experiment `plots/` directory. Embedding caches are keyed by dataset, model id/revision, dimension, and encoding configuration.
 
+Reference runs for FiQA and ArguAna across the Qwen3-Embedding, BGE-M3, and E5-Base-v2 adapters are committed under `results/`, together with the aggregated `results/summary.json` and the cross-model PCA analysis in `results/delta_pca/`. Only the embedding cache under `cache/` is excluded, so those runs can be inspected without re-encoding any corpus. The `cache_dir` field recorded in `results/delta_pca/metadata.json` refers to the local cache layout of the machine that produced it and is informational only.
+
 `HitRate@K` is the fraction of queries with at least one relevant document in the top K. `Recall@K` is macro-averaged across queries as `retrieved relevant / all relevant`. The per-query parquet stores both values and their underlying counts.
 
 The first version intentionally uses exact in-memory retrieval. PostgreSQL/pgvector can be added behind the retrieval interface later without changing dataset/model adapters.

@@ -1,0 +1,36 @@
+{
+  "dataset": {
+    "name": "fiqa",
+    "root": "datasets",
+    "split": "test",
+    "download": false
+  },
+  "model": {
+    "adapter": "qwen3",
+    "model_id": "Qwen/Qwen3-Embedding-0.6B",
+    "revision": "siliconflow-api",
+    "dimension": 1024,
+    "batch_size": 32,
+    "query_instruction": "Given a web search query, retrieve relevant passages that answer the query",
+    "provider": {
+      "type": "siliconflow",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "api_key_env": "SILICONFLOW_API_KEY",
+      "timeout_seconds": 120,
+      "max_retries": 5,
+      "encoding_format": "float"
+    }
+  },
+  "cache_dir": "cache",
+  "results_dir": "results",
+  "search_k": 100,
+  "temperature": 1.0,
+  "oracle_lambdas": [
+    0,
+    0.01,
+    0.02,
+    0.05,
+    0.1,
+    0.2
+  ]
+}

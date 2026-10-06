@@ -6,8 +6,9 @@ __pycache__/
 
 # Root-level run artifacts only. Do not use "datasets/" unanchored: it would
 # also match src/dense_retrieval/datasets/, silently dropping source modules.
+# "/results/" is intentionally not ignored: the reference runs are small enough
+# to commit. Only the embedding cache stays out.
 /cache/
-/results/
 /datasets/
 
 # local scratch probe scripts with machine-specific paths
