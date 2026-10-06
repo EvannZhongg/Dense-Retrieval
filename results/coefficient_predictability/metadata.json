@@ -1,0 +1,131 @@
+[
+  {
+    "dataset": "fiqa",
+    "model": "Qwen3",
+    "split_method": "official FiQA train/dev/test qrels",
+    "cache_dir": "cache\\fiqa\\Qwen__Qwen3-Embedding-0.6B\\e6a4682fb115dcc37051",
+    "train_queries": 5500,
+    "dev_queries": 500,
+    "test_queries": 648,
+    "train_missing_positive": [],
+    "dev_missing_positive": [],
+    "test_missing_positive": [],
+    "pairwise_split_overlap": 0,
+    "rank": 128,
+    "selected_alpha": 1.0,
+    "dev_selected_lambda": 0.3,
+    "test_gold_used_by_prediction": false,
+    "test_gold_used_for_oracle_diagnostics": true
+  },
+  {
+    "dataset": "fiqa",
+    "model": "BGE-M3",
+    "split_method": "official FiQA train/dev/test qrels",
+    "cache_dir": "cache\\fiqa\\BAAI__bge-m3\\eb3840d2f6c5b2d1b8bf",
+    "train_queries": 5500,
+    "dev_queries": 500,
+    "test_queries": 648,
+    "train_missing_positive": [],
+    "dev_missing_positive": [],
+    "test_missing_positive": [],
+    "pairwise_split_overlap": 0,
+    "rank": 128,
+    "selected_alpha": 1.0,
+    "dev_selected_lambda": 0.05,
+    "test_gold_used_by_prediction": false,
+    "test_gold_used_for_oracle_diagnostics": true
+  },
+  {
+    "dataset": "fiqa",
+    "model": "E5",
+    "split_method": "official FiQA train/dev/test qrels",
+    "cache_dir": "cache\\fiqa\\intfloat__e5-base-v2\\0cbdbf5bea302a8d7116",
+    "train_queries": 5500,
+    "dev_queries": 500,
+    "test_queries": 648,
+    "train_missing_positive": [],
+    "dev_missing_positive": [],
+    "test_missing_positive": [],
+    "pairwise_split_overlap": 0,
+    "rank": 128,
+    "selected_alpha": 1.0,
+    "dev_selected_lambda": 0.2,
+    "test_gold_used_by_prediction": false,
+    "test_gold_used_for_oracle_diagnostics": true
+  },
+  {
+    "dataset": "arguana",
+    "model": "Qwen3",
+    "split_method": "stable 70/15/15 split of official ArguAna test queries",
+    "cache_dir": "cache\\arguana\\Qwen__Qwen3-Embedding-0.6B\\20773436739d4d311d2e",
+    "train_queries": 984,
+    "dev_queries": 211,
+    "test_queries": 211,
+    "train_missing_positive": [
+      "test-free-speech-debate-yfsdfkhbwu-con03a",
+      "test-education-ufsdfkhbwu-con03a",
+      "test-politics-dhwem-pro06a",
+      "test-society-asfhwapg-con04a"
+    ],
+    "dev_missing_positive": [
+      "test-science-sghwbdgmo-con03a"
+    ],
+    "test_missing_positive": [],
+    "pairwise_split_overlap": 0,
+    "rank": 128,
+    "selected_alpha": 1.0,
+    "dev_selected_lambda": 1.0,
+    "test_gold_used_by_prediction": false,
+    "test_gold_used_for_oracle_diagnostics": true
+  },
+  {
+    "dataset": "arguana",
+    "model": "BGE-M3",
+    "split_method": "stable 70/15/15 split of official ArguAna test queries",
+    "cache_dir": "cache\\arguana\\BAAI__bge-m3\\e5f82074df232c7f3aea",
+    "train_queries": 984,
+    "dev_queries": 211,
+    "test_queries": 211,
+    "train_missing_positive": [
+      "test-free-speech-debate-yfsdfkhbwu-con03a",
+      "test-education-ufsdfkhbwu-con03a",
+      "test-politics-dhwem-pro06a",
+      "test-society-asfhwapg-con04a"
+    ],
+    "dev_missing_positive": [
+      "test-science-sghwbdgmo-con03a"
+    ],
+    "test_missing_positive": [],
+    "pairwise_split_overlap": 0,
+    "rank": 128,
+    "selected_alpha": 1.0,
+    "dev_selected_lambda": 1.0,
+    "test_gold_used_by_prediction": false,
+    "test_gold_used_for_oracle_diagnostics": true
+  },
+  {
+    "dataset": "arguana",
+    "model": "E5",
+    "split_method": "stable 70/15/15 split of official ArguAna test queries",
+    "cache_dir": "cache\\arguana\\intfloat__e5-base-v2\\927584646274e7a7bc76",
+    "train_queries": 984,
+    "dev_queries": 211,
+    "test_queries": 211,
+    "train_missing_positive": [
+      "test-free-speech-debate-yfsdfkhbwu-con03a",
+      "test-education-ufsdfkhbwu-con03a",
+      "test-politics-dhwem-pro06a",
+      "test-society-asfhwapg-con04a"
+    ],
+    "dev_missing_positive": [
+      "test-science-sghwbdgmo-con03a"
+    ],
+    "test_missing_positive": [],
+    "pairwise_split_overlap": 0,
+    "rank": 128,
+    "selected_alpha": 0.1,
+    "dev_selected_lambda": 0.75,
+    "test_gold_used_by_prediction": false,
+    "test_gold_used_for_oracle_diagnostics": true
+  }
+]

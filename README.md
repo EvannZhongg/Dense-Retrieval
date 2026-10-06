@@ -49,6 +49,25 @@ Reference runs for FiQA and ArguAna across the Qwen3-Embedding, BGE-M3, and E5-B
 
 The first version intentionally uses exact in-memory retrieval. PostgreSQL/pgvector can be added behind the retrieval interface later without changing dataset/model adapters.
 
+Prototype Correction Field
+--------------------------
+
+The frozen corpus can also provide a compact query-side correction prior. Run
+`python scripts/run_prototype_correction.py --datasets fiqa --models e5` to fit
+64 spherical K-Means document prototypes, retain the Top-8 prototype weights
+for each query, and learn one correction coordinate vector per prototype from
+the training oracle coordinates. The script saves the field under
+`results/prototype_correction/models/` and evaluates the one-pass corrected
+query against the unchanged document index. Prototype fitting uses document
+embeddings only; test qrels are not used to construct the field.
+
+The reusable implementation is in
+`dense_retrieval.analysis.prototype_correction`: `fit_spherical_kmeans`,
+`prototype_weights`, `fit_prototype_values`, and
+`PrototypeCorrectionField`. When correction values are low-rank coordinates,
+pass the PCA `mean` and `components` to the field so it can reconstruct a
+full-dimensional delta before applying it to a normalized query.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.
