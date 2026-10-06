@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -14,7 +13,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import yaml
 from dotenv import load_dotenv
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error, r2_score
@@ -22,17 +20,25 @@ from sklearn.metrics import mean_squared_error, r2_score
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-LOW_RANK_PATH = ROOT / "scripts" / "run_low_rank_oracle.py"
-SPEC = importlib.util.spec_from_file_location("run_low_rank_oracle", LOW_RANK_PATH)
-low_rank = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(low_rank)
-
-from dense_retrieval.datasets import RetrievalDataset, load_beir_dataset
-from dense_retrieval.embeddings import create_embedding_model
-
-
-MODEL_SPECS = low_rank.MODEL_SPECS
-METRICS = low_rank.METRICS
+from dense_retrieval.analysis.query_correction import (  # noqa: E402
+    apply_correction,
+    build_oracle_deltas,
+    gain_retention,
+    load_model_config,
+    prepare_correction_data,
+    project_deltas,
+)
+from dense_retrieval.datasets import RetrievalDataset, load_beir_dataset  # noqa: E402
+from dense_retrieval.datasets.splits import rows_for_queries  # noqa: E402
+from dense_retrieval.embeddings import (  # noqa: E402
+    MODEL_SPECS,
+    cached_encode_queries,
+    create_embedding_model,
+)
+from dense_retrieval.evaluation.ranking import (  # noqa: E402
+    METRICS,
+    evaluate_retrieval,
+)
 METHODS = [
     "baseline",
     "full_oracle",
@@ -132,7 +138,15 @@ def prepare_splits(dataset_name, cache_root, model_spec):
         documents,
         cache_dir,
         _,
-    ) = low_rank.prepare_data(dataset_name, cache_root, model_spec)
+) = prepare_correction_data(
+        dataset_name,
+        model_spec,
+        cache_root=cache_root,
+        datasets_root=ROOT / "datasets",
+        configs_root=ROOT / "configs",
+        split_salt="arguana-low-rank-v1",
+        missing_relevant_policy="keep",
+    )
 
     if dataset_name == "fiqa":
         dev_dataset = load_beir_dataset("fiqa", ROOT / "datasets", "dev", False)
@@ -140,11 +154,10 @@ def prepare_splits(dataset_name, cache_root, model_spec):
         if dev_path.exists():
             dev_queries = np.load(dev_path, mmap_mode="r")
         else:
-            config = yaml.safe_load(
-                (ROOT / "configs" / model_spec["config"]).read_text(encoding="utf-8")
+            embedding_model = create_embedding_model(
+                load_model_config(ROOT / "configs", model_spec)["model"]
             )
-            embedding_model = create_embedding_model(config["model"])
-            dev_queries = low_rank.cached_encode_queries(
+            dev_queries = cached_encode_queries(
                 embedding_model, dev_dataset.query_texts, dev_path
             )
         test_dataset = original_test_dataset
@@ -156,8 +169,8 @@ def prepare_splits(dataset_name, cache_root, model_spec):
         )
         dev_dataset, test_dataset = split_arguana_dev_test(original_test_dataset)
         full_queries = np.load(cache_dir / "queries.npy", mmap_mode="r")
-        dev_queries = full_queries[low_rank.rows_for_queries(full_dataset, dev_dataset)]
-        test_queries = full_queries[low_rank.rows_for_queries(full_dataset, test_dataset)]
+        dev_queries = full_queries[rows_for_queries(full_dataset, dev_dataset)]
+        test_queries = full_queries[rows_for_queries(full_dataset, test_dataset)]
         split_method = "stable 70/15/15 split of official ArguAna test queries"
 
     return (
@@ -196,7 +209,7 @@ def evaluate_methods(
     batch_size,
 ):
     rows = []
-    baseline = low_rank.evaluate(dataset, queries, documents, batch_size)
+    baseline = evaluate_retrieval(dataset, queries, documents, batch_size)
     all_rows = np.arange(len(queries), dtype=np.int64)
     for lambda_ in lambdas:
         method_deltas = {
@@ -209,10 +222,10 @@ def evaluate_methods(
             if method == "baseline":
                 metrics = baseline
             else:
-                corrected = low_rank.apply_correction(
+                corrected = apply_correction(
                     queries, correction[0], correction[1], lambda_
                 )
-                metrics = low_rank.evaluate(dataset, corrected, documents, batch_size)
+                metrics = evaluate_retrieval(dataset, corrected, documents, batch_size)
             rows.append({"lambda": lambda_, "method": method, **metrics})
     return pd.DataFrame(rows)
 
@@ -240,10 +253,10 @@ def gain_retention_rows(summary):
                         "baseline": baseline,
                         "full_oracle": full,
                         "subspace_oracle": subspace,
-                        "retention_vs_full_oracle": low_rank.gain_retention(
+                        "retention_vs_full_oracle": gain_retention(
                             value, baseline, full
                         ),
-                        "retention_vs_subspace_oracle": low_rank.gain_retention(
+                        "retention_vs_subspace_oracle": gain_retention(
                             value, baseline, subspace
                         ),
                     }
@@ -325,13 +338,13 @@ def run(args):
                 args.results_root, dataset_name, model_key, args.rank
             )
 
-            train_rows, train_deltas, train_missing = low_rank.build_oracle_deltas(
+            train_rows, train_deltas, train_missing = build_oracle_deltas(
                 train_dataset, train_queries, documents
             )
-            dev_rows, dev_deltas, dev_missing = low_rank.build_oracle_deltas(
+            dev_rows, dev_deltas, dev_missing = build_oracle_deltas(
                 dev_dataset, dev_queries, documents
             )
-            test_rows, test_deltas, test_missing = low_rank.build_oracle_deltas(
+            test_rows, test_deltas, test_missing = build_oracle_deltas(
                 test_dataset, test_queries, documents
             )
             train_coefficients = (train_deltas - mean) @ components.T
@@ -372,10 +385,10 @@ def run(args):
                 components=components.astype(np.float32),
             )
 
-            dev_subspace = low_rank.project_deltas(
+            dev_subspace = project_deltas(
                 dev_deltas, mean, components, args.rank
             )
-            test_subspace = low_rank.project_deltas(
+            test_subspace = project_deltas(
                 test_deltas, mean, components, args.rank
             )
             dev_predicted = predicted_delta(

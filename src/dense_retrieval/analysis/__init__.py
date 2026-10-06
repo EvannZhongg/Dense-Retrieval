@@ -11,6 +11,17 @@ from .prototype_correction import (
     prototype_weights,
     spherical_kmeans,
 )
+from .query_correction import (
+    apply_correction,
+    apply_oracle_correction,
+    build_oracle_deltas,
+    fit_pca_subspace,
+    gain_retention,
+    load_model_config,
+    prepare_correction_data,
+    project_deltas,
+    select_oracle_positives,
+)
 
 __all__ = [
     "summarize_results",
@@ -24,4 +35,13 @@ __all__ = [
     "predict_prototype_values",
     "project_correction_targets",
     "spherical_kmeans",
+    "apply_correction",
+    "apply_oracle_correction",
+    "build_oracle_deltas",
+    "fit_pca_subspace",
+    "gain_retention",
+    "load_model_config",
+    "prepare_correction_data",
+    "project_deltas",
+    "select_oracle_positives",
 ]

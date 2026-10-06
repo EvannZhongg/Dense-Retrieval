@@ -15,94 +15,18 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from dense_retrieval.datasets import load_beir_dataset
-from dense_retrieval.evaluation.oracle import closest_positive_index
-from dense_retrieval.evaluation.quality import compute_quality_metrics
-from dense_retrieval.retrieval.exact import exact_search
-
-
-MODEL_SPECS = {
-    "qwen3": (
-        "Qwen3",
-        "Qwen__Qwen3-Embedding-0.6B",
-        "qwen3-embedding-0.6b",
-    ),
-    "bge-m3": ("BGE-M3", "BAAI__bge-m3", "bge-m3"),
-    "e5": ("E5", "intfloat__e5-base-v2", "e5-base-v2"),
-}
+from dense_retrieval.analysis.query_correction import (  # noqa: E402
+    apply_oracle_correction,
+    select_oracle_positives,
+)
+from dense_retrieval.datasets import load_beir_dataset  # noqa: E402
+from dense_retrieval.embeddings import MODEL_SPECS, find_cache_dir  # noqa: E402
+from dense_retrieval.evaluation.quality import compute_quality_metrics  # noqa: E402
+from dense_retrieval.evaluation.ranking import (  # noqa: E402
+    METRICS,
+    top_k_document_ids,
+)
 COLORS = {"Qwen3": "#2f6f9f", "BGE-M3": "#c4513b", "E5": "#41844b"}
-METRICS = [
-    "HitRate@5",
-    "HitRate@10",
-    "Recall@5",
-    "Recall@10",
-    "MRR@10",
-    "NDCG@10",
-]
-
-
-def find_cache_dir(cache_root: Path, dataset: str, model_dir: str) -> Path:
-    root = cache_root / dataset / model_dir
-    candidates = (
-        sorted(
-            path
-            for path in root.iterdir()
-            if (path / "queries.npy").exists()
-            and (path / "documents.npy").exists()
-        )
-        if root.exists()
-        else []
-    )
-    if len(candidates) != 1:
-        raise RuntimeError(
-            f"Expected exactly one complete cache under {root}, found {len(candidates)}"
-        )
-    return candidates[0]
-
-
-def select_oracle_positives(dataset, query_embeddings, document_embeddings):
-    document_index = {
-        doc_id: index for index, doc_id in enumerate(dataset.corpus)
-    }
-    positives = np.zeros_like(query_embeddings)
-    available = np.zeros(len(query_embeddings), dtype=bool)
-    for query_index, sample in enumerate(dataset.queries):
-        positive_index = closest_positive_index(
-            sample.query_id,
-            dataset.qrels,
-            query_embeddings[query_index],
-            document_embeddings,
-            document_index,
-        )
-        if positive_index is not None:
-            positives[query_index] = document_embeddings[positive_index]
-            available[query_index] = True
-    return positives, available
-
-
-def apply_oracle_correction(query_embeddings, positives, available, lambda_):
-    corrected = np.asarray(query_embeddings, dtype=np.float32).copy()
-    corrected[available] = (
-        corrected[available] * (1.0 - lambda_)
-        + positives[available] * lambda_
-    )
-    norms = np.linalg.norm(corrected, axis=1, keepdims=True)
-    return corrected / np.maximum(norms, 1e-12)
-
-
-def top_k_document_ids(
-    query_embeddings, document_embeddings, document_ids, k=10, batch_size=128
-):
-    rankings = []
-    document_ids = np.asarray(document_ids, dtype=object)
-    for start in range(0, len(query_embeddings), batch_size):
-        indices, _ = exact_search(
-            query_embeddings[start : start + batch_size], document_embeddings, k
-        )
-        rankings.extend(document_ids[indices].tolist())
-    return rankings
-
-
 def validate_against_parquet(existing, per_query, lambda_, dataset, model):
     expected = existing[np.isclose(existing["lambda"], lambda_)].copy()
     expected["query_id"] = expected["query_id"].astype(str)
@@ -169,7 +93,10 @@ def run(args):
         document_ids = list(dataset.corpus)
 
         for model_key in args.models:
-            model_label, model_cache_dir, model_result_dir = MODEL_SPECS[model_key]
+            spec = MODEL_SPECS[model_key]
+            model_label = spec["label"]
+            model_cache_dir = spec["cache_dir"]
+            model_result_dir = spec["result_dir"]
             cache_dir = find_cache_dir(
                 args.cache_root, dataset_name, model_cache_dir
             )

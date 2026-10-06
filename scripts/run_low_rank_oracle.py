@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -13,44 +12,25 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import yaml
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from dense_retrieval.datasets import RetrievalDataset, load_beir_dataset
-from dense_retrieval.embeddings import create_embedding_model
-from dense_retrieval.evaluation.oracle import closest_positive_index
-from dense_retrieval.evaluation.quality import compute_quality_metrics
-from dense_retrieval.retrieval.exact import exact_search
+from dense_retrieval.analysis.query_correction import (  # noqa: E402
+    apply_correction,
+    build_oracle_deltas,
+    fit_pca_subspace,
+    gain_retention,
+    prepare_correction_data,
+    project_deltas,
+)
+from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402
+from dense_retrieval.evaluation.ranking import (  # noqa: E402
+    METRICS,
+    evaluate_retrieval,
+)
 
-
-MODEL_SPECS = {
-    "qwen3": {
-        "label": "Qwen3",
-        "cache_dir": "Qwen__Qwen3-Embedding-0.6B",
-        "config": "fiqa_qwen3_siliconflow.yaml",
-    },
-    "bge-m3": {
-        "label": "BGE-M3",
-        "cache_dir": "BAAI__bge-m3",
-        "config": "fiqa_bge_m3_siliconflow.yaml",
-    },
-    "e5": {
-        "label": "E5",
-        "cache_dir": "intfloat__e5-base-v2",
-        "config": "fiqa_e5_base_v2_openrouter.yaml",
-    },
-}
-METRICS = [
-    "HitRate@5",
-    "HitRate@10",
-    "Recall@5",
-    "Recall@10",
-    "MRR@10",
-    "NDCG@10",
-]
 COLORS = {
     "baseline": "#666666",
     "full_oracle": "#111111",
@@ -58,157 +38,6 @@ COLORS = {
     "rank_128": "#c4513b",
     "rank_256": "#41844b",
 }
-
-
-def find_cache_dir(cache_root: Path, dataset: str, model_dir: str) -> Path:
-    root = cache_root / dataset / model_dir
-    candidates = (
-        sorted(
-            path
-            for path in root.iterdir()
-            if (path / "queries.npy").exists()
-            and (path / "documents.npy").exists()
-        )
-        if root.exists()
-        else []
-    )
-    if len(candidates) != 1:
-        raise RuntimeError(
-            f"Expected exactly one complete cache under {root}, found {len(candidates)}"
-        )
-    return candidates[0]
-
-
-def cached_encode_queries(model, texts, path: Path):
-    if path.exists():
-        array = np.load(path)
-        if array.shape == (len(texts), model.dimension):
-            return array.astype(np.float32)
-    batch_size = int(getattr(model, "cache_batch_size", model.batch_size))
-    parts_dir = path.parent / f"{path.stem}_parts"
-    parts_dir.mkdir(parents=True, exist_ok=True)
-    parts = []
-    for start in range(0, len(texts), batch_size):
-        end = min(start + batch_size, len(texts))
-        part_path = parts_dir / f"{start:09d}_{end:09d}.npy"
-        part = np.load(part_path) if part_path.exists() else None
-        if part is None or part.shape != (end - start, model.dimension):
-            part = model.encode_queries(texts[start:end]).astype(np.float32)
-            np.save(part_path, part)
-        parts.append(part)
-        print(f"train query encoding: {end}/{len(texts)}", flush=True)
-    array = np.concatenate(parts)
-    np.save(path, array)
-    return array
-
-
-def stable_arguana_split(dataset, train_fraction=0.7):
-    ordered = sorted(
-        dataset.queries,
-        key=lambda sample: hashlib.sha256(
-            f"arguana-low-rank-v1:{sample.query_id}".encode()
-        ).digest(),
-    )
-    split_index = int(round(len(ordered) * train_fraction))
-    train_ids = {sample.query_id for sample in ordered[:split_index]}
-    test_ids = {sample.query_id for sample in ordered[split_index:]}
-
-    def subset(name, ids):
-        queries = [sample for sample in dataset.queries if sample.query_id in ids]
-        qrels = {sample.query_id: dataset.qrels[sample.query_id] for sample in queries}
-        return RetrievalDataset(name, queries, dataset.corpus, qrels)
-
-    return subset("arguana_train", train_ids), subset("arguana_holdout", test_ids)
-
-
-def rows_for_queries(full_dataset, subset_dataset):
-    index = {
-        sample.query_id: row for row, sample in enumerate(full_dataset.queries)
-    }
-    return np.asarray([index[sample.query_id] for sample in subset_dataset.queries])
-
-
-def build_oracle_deltas(dataset, query_embeddings, document_embeddings):
-    document_index = {
-        doc_id: index for index, doc_id in enumerate(dataset.corpus)
-    }
-    query_rows = []
-    deltas = []
-    missing_query_ids = []
-    for query_row, sample in enumerate(dataset.queries):
-        positive_index = closest_positive_index(
-            sample.query_id,
-            dataset.qrels,
-            query_embeddings[query_row],
-            document_embeddings,
-            document_index,
-        )
-        if positive_index is None:
-            missing_query_ids.append(sample.query_id)
-            continue
-        query = np.asarray(query_embeddings[query_row], dtype=np.float64)
-        positive = np.asarray(document_embeddings[positive_index], dtype=np.float64)
-        query_rows.append(query_row)
-        deltas.append(positive - query)
-    return (
-        np.asarray(query_rows, dtype=np.int64),
-        np.asarray(deltas, dtype=np.float64),
-        missing_query_ids,
-    )
-
-
-def fit_pca_subspace(train_deltas, max_rank):
-    mean = train_deltas.mean(axis=0)
-    centered = train_deltas - mean
-    _, _, components = np.linalg.svd(centered, full_matrices=False)
-    return mean, components[:max_rank]
-
-
-def project_deltas(deltas, mean, components, rank):
-    basis = components[:rank]
-    centered = deltas - mean
-    return mean + (centered @ basis.T) @ basis
-
-
-def apply_correction(query_embeddings, query_rows, deltas, lambda_):
-    corrected = np.asarray(query_embeddings, dtype=np.float64).copy()
-    corrected[query_rows] += float(lambda_) * deltas
-    corrected /= np.maximum(np.linalg.norm(corrected, axis=1, keepdims=True), 1e-12)
-    return corrected.astype(np.float32)
-
-
-def top_k_document_ids(
-    query_embeddings, document_embeddings, document_ids, k=10, batch_size=128
-):
-    rankings = []
-    document_ids = np.asarray(document_ids, dtype=object)
-    for start in range(0, len(query_embeddings), batch_size):
-        indices, _ = exact_search(
-            query_embeddings[start : start + batch_size], document_embeddings, k
-        )
-        rankings.extend(document_ids[indices].tolist())
-    return rankings
-
-
-def evaluate(dataset, queries, documents, batch_size):
-    rankings = top_k_document_ids(
-        queries, documents, list(dataset.corpus), 10, batch_size
-    )
-    metrics, _ = compute_quality_metrics(
-        [sample.query_id for sample in dataset.queries],
-        dataset.qrels,
-        rankings,
-        cutoffs=(5, 10),
-        available_document_ids=set(dataset.corpus),
-    )
-    return {metric: metrics[metric] for metric in METRICS}
-
-
-def gain_retention(metric_value, baseline, oracle):
-    denominator = oracle - baseline
-    if abs(denominator) <= 1e-12:
-        return np.nan
-    return (metric_value - baseline) / denominator
 
 
 def plot_curves(summary, dataset, model, output_path):
@@ -335,7 +164,15 @@ def run(args):
                 documents,
                 cache_dir,
                 split_method,
-            ) = prepare_data(dataset_name, args.cache_root, model_spec)
+            ) = prepare_correction_data(
+                dataset_name,
+                model_spec,
+                cache_root=args.cache_root,
+                datasets_root=ROOT / "datasets",
+                configs_root=ROOT / "configs",
+                split_salt="arguana-low-rank-v1",
+                missing_relevant_policy="keep",
+            )
 
             train_rows, train_deltas, train_missing = build_oracle_deltas(
                 train_dataset, train_queries, documents
@@ -354,7 +191,7 @@ def run(args):
                 for rank in args.ranks
             }
 
-            baseline_metrics = evaluate(
+            baseline_metrics = evaluate_retrieval(
                 test_dataset, test_queries, documents, args.batch_size
             )
             for lambda_ in args.lambdas:
@@ -373,7 +210,7 @@ def run(args):
                     metrics = (
                         baseline_metrics
                         if correction == "baseline"
-                        else evaluate(
+                        else evaluate_retrieval(
                             test_dataset, corrected, documents, args.batch_size
                         )
                     )

@@ -1,13 +1,6 @@
-import importlib.util
-from pathlib import Path
-
 import numpy as np
 
-
-SCRIPT = Path(__file__).parents[1] / "scripts" / "summarize_oracle_correction.py"
-SPEC = importlib.util.spec_from_file_location("summarize_oracle_correction", SCRIPT)
-MODULE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(MODULE)
+from dense_retrieval.analysis.query_correction import apply_oracle_correction
 
 
 def test_apply_oracle_correction_moves_only_available_queries_and_normalizes():
@@ -15,7 +8,7 @@ def test_apply_oracle_correction_moves_only_available_queries_and_normalizes():
     positives = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float32)
     available = np.array([True, False])
 
-    corrected = MODULE.apply_oracle_correction(
+    corrected = apply_oracle_correction(
         queries, positives, available, lambda_=0.5
     )
 

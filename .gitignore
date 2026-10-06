@@ -6,10 +6,13 @@ __pycache__/
 
 # Root-level run artifacts only. Do not use "datasets/" unanchored: it would
 # also match src/dense_retrieval/datasets/, silently dropping source modules.
-# "/results/" is intentionally not ignored: the reference runs are small enough
-# to commit. Only the embedding cache stays out.
 /cache/
 /datasets/
+
+# Fitted correction artifacts (subspace bases, prototype fields, ridge weights)
+# are reproducible from the embedding cache, so only the CSV/PNG/JSON outputs of
+# the reference runs are committed.
+/results/**/*.npz
 
 # local scratch probe scripts with machine-specific paths
 scripts/probe_query_calibration.py

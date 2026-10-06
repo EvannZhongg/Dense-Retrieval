@@ -16,41 +16,14 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from dense_retrieval.datasets import load_beir_dataset
-from dense_retrieval.evaluation.oracle import closest_positive_index
-
-
-MODEL_SPECS = {
-    "qwen3": ("Qwen3", "Qwen__Qwen3-Embedding-0.6B"),
-    "bge-m3": ("BGE-M3", "BAAI__bge-m3"),
-    "e5": ("E5", "intfloat__e5-base-v2"),
-}
+from dense_retrieval.datasets import load_beir_dataset  # noqa: E402
+from dense_retrieval.embeddings import MODEL_SPECS, find_cache_dir  # noqa: E402
+from dense_retrieval.evaluation.oracle import closest_positive_index  # noqa: E402
 COLORS = {"Qwen3": "#2f6f9f", "BGE-M3": "#c4513b", "E5": "#41844b"}
 VARIANT_TITLES = {
     "delta_star": r"$\Delta^* = d^* - q$",
     "delta_star_q_orthogonal_unit": r"Unit $q$-orthogonal direction",
 }
-
-
-def find_cache_dir(cache_root: Path, dataset: str, model_dir: str) -> Path:
-    root = cache_root / dataset / model_dir
-    candidates = (
-        sorted(
-            path
-            for path in root.iterdir()
-            if (path / "queries.npy").exists()
-            and (path / "documents.npy").exists()
-        )
-        if root.exists()
-        else []
-    )
-    if len(candidates) != 1:
-        raise RuntimeError(
-            f"Expected exactly one complete cache under {root}, found {len(candidates)}"
-        )
-    return candidates[0]
-
-
 def build_query_level_deltas(dataset, query_embeddings, document_embeddings):
     """Build one closest-positive target and one unit tangent direction per query."""
     document_index = {
@@ -123,7 +96,7 @@ def plot_spectra(spectrum: pd.DataFrame, output_path: Path, ranks: list[int]):
                 & (spectrum["variant"] == variant)
             ]
             for model_key in MODEL_SPECS:
-                label = MODEL_SPECS[model_key][0]
+                label = MODEL_SPECS[model_key]["label"]
                 rows = subset[subset["model"] == label]
                 axis.plot(
                     rows["rank"],
@@ -171,7 +144,9 @@ def run(args):
             missing_relevant_policy="keep",
         )
         for model_key in args.models:
-            model_label, model_dir = MODEL_SPECS[model_key]
+            spec = MODEL_SPECS[model_key]
+            model_label = spec["label"]
+            model_dir = spec["cache_dir"]
             cache_dir = find_cache_dir(args.cache_root, dataset_name, model_dir)
             query_embeddings = np.load(cache_dir / "queries.npy", mmap_mode="r")
             document_embeddings = np.load(
