@@ -2,11 +2,13 @@
 .venv/
 __pycache__/
 .pytest_cache/
-cache/
-results/
-datasets/
 *.pyc
+
+# Root-level run artifacts only. Do not use "datasets/" unanchored: it would
+# also match src/dense_retrieval/datasets/, silently dropping source modules.
+/cache/
+/results/
+/datasets/
 
 # local scratch probe scripts with machine-specific paths
 scripts/probe_query_calibration.py
-
