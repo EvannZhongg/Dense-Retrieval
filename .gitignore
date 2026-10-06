@@ -7,3 +7,6 @@ results/
 datasets/
 *.pyc
 
+# local scratch probe scripts with machine-specific paths
+scripts/probe_query_calibration.py
+
