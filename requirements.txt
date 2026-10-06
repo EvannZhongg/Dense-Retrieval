@@ -1,0 +1,10 @@
+numpy
+pandas
+pyarrow
+pyyaml
+python-dotenv
+requests
+scipy
+matplotlib
+sentence-transformers
+beir

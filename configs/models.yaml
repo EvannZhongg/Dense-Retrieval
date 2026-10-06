@@ -1,0 +1,25 @@
+models:
+  e5-large-v2:
+    adapter: e5
+    model_id: intfloat/e5-large-v2
+    revision: main
+    batch_size: 32
+  qwen3-embedding-0.6b:
+    adapter: qwen3
+    model_id: Qwen/Qwen3-Embedding-0.6B
+    revision: siliconflow-api
+    dimension: 1024
+    batch_size: 32
+    query_instruction: "Given a web search query, retrieve relevant passages that answer the query"
+    provider:
+      type: siliconflow
+      base_url: https://api.siliconflow.cn/v1
+      api_key_env: SILICONFLOW_API_KEY
+      timeout_seconds: 120
+      max_retries: 5
+      encoding_format: float
+  gte-modernbert-base:
+    adapter: gte
+    model_id: Alibaba-NLP/gte-modernbert-base
+    revision: main
+    batch_size: 32
