@@ -90,6 +90,16 @@ class SiliconFlowProvider(OpenAICompatibleProvider):
         )
 
 
+class OpenRouterProvider(OpenAICompatibleProvider):
+    def __init__(self, **kwargs):
+        super().__init__(
+            base_url=kwargs.pop("base_url", "https://openrouter.ai/api/v1"),
+            api_key_env=kwargs.pop("api_key_env", "OPENROUTER_API_KEY"),
+            provider_id="openrouter",
+            **kwargs,
+        )
+
+
 def create_provider(config: dict) -> EmbeddingProvider:
     provider_type = config.get("type", "siliconflow").lower()
     common = {
@@ -105,9 +115,10 @@ def create_provider(config: dict) -> EmbeddingProvider:
     }
     if provider_type == "siliconflow":
         return SiliconFlowProvider(**common)
+    if provider_type == "openrouter":
+        return OpenRouterProvider(**common)
     if provider_type == "openai-compatible":
         if "base_url" not in common or "api_key_env" not in common:
             raise ValueError("openai-compatible provider requires base_url and api_key_env")
         return OpenAICompatibleProvider(**common)
     raise ValueError(f"Unsupported embedding provider: {provider_type}")
-

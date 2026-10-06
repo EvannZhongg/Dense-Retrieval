@@ -22,6 +22,7 @@ def compute_quality_metrics(
     qrels: Dict[str, Dict[str, int]],
     ranked_document_ids: Sequence[Sequence[str]],
     cutoffs: Sequence[int] = DEFAULT_CUTOFFS,
+    available_document_ids: set[str] | None = None,
 ) -> tuple[dict, pd.DataFrame]:
     """Compute macro retrieval metrics and auditable per-query values.
 
@@ -51,10 +52,13 @@ def compute_quality_metrics(
             rank for rank, doc_id in enumerate(ranking, start=1) if doc_id in relevant
         ]
         best_rank = min(relevant_ranks, default=None)
+        available_ids = available_document_ids if available_document_ids is not None else set(ranking)
         row = {
             "query_id": query_id,
             "relevant_doc_ids": list(relevant),
             "relevant_count": len(relevant),
+            "available_relevant_count": sum(doc_id in available_ids for doc_id in relevant),
+            "missing_relevant_count": sum(doc_id not in available_ids for doc_id in relevant),
             "best_relevant_rank": best_rank,
         }
 
@@ -87,4 +91,3 @@ def compute_quality_metrics(
         }
     )
     return metrics, frame
-

@@ -53,7 +53,13 @@ def cached_encode(model, texts, path, kind):
 
 def run(config):
     ds_cfg, model_cfg = config["dataset"], config["model"]
-    dataset = load_beir_dataset(ds_cfg["name"], ds_cfg.get("root", "datasets"), ds_cfg.get("split", "test"), ds_cfg.get("download", False))
+    dataset = load_beir_dataset(
+        ds_cfg["name"],
+        ds_cfg.get("root", "datasets"),
+        ds_cfg.get("split", "test"),
+        ds_cfg.get("download", False),
+        ds_cfg.get("missing_relevant_policy", "error"),
+    )
     model = create_embedding_model(model_cfg); key = cache_key(dataset.name, model); cache = Path(config.get("cache_dir", "cache")) / dataset.name / model.model_id.replace("/", "__") / key
     query_ids = [q.query_id for q in dataset.queries]; query_texts = [q.query_text for q in dataset.queries]; doc_ids = list(dataset.corpus); doc_texts = [f"{dataset.corpus[d].title}\n{dataset.corpus[d].text}".strip() for d in doc_ids]
     qemb = cached_encode(model, query_texts, cache / "queries.npy", "query"); demb = cached_encode(model, doc_texts, cache / "documents.npy", "document")

@@ -21,6 +21,24 @@ python scripts/plot_results.py --results results
 
 The API key is read from `SILICONFLOW_API_KEY` in the project-root `.env`. Hosted encoding is checkpointed per batch under `cache/`, so rerunning the same configuration resumes completed API batches.
 
+Run the complete FiQA test split with BGE-M3 through SiliconFlow:
+
+```powershell
+python scripts/run_experiment.py --config configs/fiqa_bge_m3_siliconflow.yaml
+python scripts/analyze_results.py --results results --output results/summary.json
+python scripts/plot_results.py --results results
+```
+
+Run the complete FiQA test split with E5 Base v2 through OpenRouter:
+
+```powershell
+python scripts/run_experiment.py --config configs/fiqa_e5_base_v2_openrouter.yaml
+python scripts/analyze_results.py --results results --output results/summary.json
+python scripts/plot_results.py --results results
+```
+
+Set `OPENROUTER_API_KEY` in the project-root `.env` before running. E5 queries use the `query:` prefix and corpus documents use the `passage:` prefix.
+
 Replace the `model` block in the YAML with a block from `configs/models.yaml`; set `dataset.name` to `fiqa`, `scifact`, or `nfcorpus` and `download: true` when the dataset is not present locally. Hugging Face authentication or mirrors can be supplied through the normal `.env`/environment configuration used by the model hub.
 
 Outputs are written under `results/<dataset>/<model>/`: `metrics.json`, one-row-per-query `query_metrics.parquet`, `oracle_correction.parquet`, the exact run `config.json`, and a per-experiment `plots/` directory. Embedding caches are keyed by dataset, model id/revision, dimension, and encoding configuration.
@@ -28,3 +46,5 @@ Outputs are written under `results/<dataset>/<model>/`: `metrics.json`, one-row-
 `HitRate@K` is the fraction of queries with at least one relevant document in the top K. `Recall@K` is macro-averaged across queries as `retrieved relevant / all relevant`. The per-query parquet stores both values and their underlying counts.
 
 The first version intentionally uses exact in-memory retrieval. PostgreSQL/pgvector can be added behind the retrieval interface later without changing dataset/model adapters.
+
+ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.

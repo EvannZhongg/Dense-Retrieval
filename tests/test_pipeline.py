@@ -1,6 +1,7 @@
 import sys
 sys.path.insert(0, "src")
 import numpy as np
+import pandas as pd
 from dense_retrieval.embeddings import HashEmbeddingModel
 from dense_retrieval.evaluation import evaluate_embeddings, run_oracle_correction
 
@@ -23,3 +24,24 @@ def test_positive_score_is_available_when_positive_is_outside_search_k():
     _, frame = evaluate_embeddings(["q"], {"q": {"d2": 1}}, q, d, ["d1", "d2"], search_k=1)
     assert frame.loc[0, "best_relevant_rank"] == 2
     assert abs(frame.loc[0, "best_relevant_score"] - 0.9) < 1e-6
+
+
+def test_missing_positive_remains_a_hard_miss_and_oracle_is_unavailable():
+    q = np.array([[1.0, 0.0]], dtype=np.float32)
+    d = np.array([[1.0, 0.0]], dtype=np.float32)
+    metrics, frame = evaluate_embeddings(
+        ["q"], {"q": {"missing": 1}}, q, d, ["available"], search_k=1
+    )
+    oracle = run_oracle_correction(
+        ["q"],
+        {"q": {"missing": 1}},
+        q,
+        d,
+        ["available"],
+        lambdas=[0],
+        search_k=1,
+    )
+    assert metrics["HitRate@10"] == 0.0
+    assert frame.loc[0, "failure_group"] == "hard_miss"
+    assert pd.isna(frame.loc[0, "best_positive_similarity"])
+    assert not bool(oracle.loc[0, "correction_available"])

@@ -26,7 +26,11 @@ def evaluate_embeddings(
     ranked_document_ids = np.asarray(document_ids, dtype=object)[ranked_indices].tolist()
 
     aggregate, quality = compute_quality_metrics(
-        query_ids, qrels, ranked_document_ids, DEFAULT_CUTOFFS
+        query_ids,
+        qrels,
+        ranked_document_ids,
+        DEFAULT_CUTOFFS,
+        set(map(str, document_ids)),
     )
     geometry = compute_geometry_metrics(
         query_ids,
@@ -41,4 +45,3 @@ def evaluate_embeddings(
         geometry, on="query_id", how="inner", validate="one_to_one"
     )
     return aggregate, add_failure_groups(per_query)
-

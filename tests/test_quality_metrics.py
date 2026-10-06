@@ -16,3 +16,16 @@ def test_hit_rate_and_recall_are_distinct_for_multi_positive_queries():
     assert per_query["retrieved_relevant_at_1"].tolist() == [1, 1]
     assert per_query["recall_at_1"].tolist() == [0.5, 1.0]
 
+
+def test_missing_relevant_document_is_auditable_and_counts_as_miss():
+    metrics, per_query = compute_quality_metrics(
+        query_ids=["q"],
+        qrels={"q": {"missing": 1}},
+        ranked_document_ids=[["available"]],
+        cutoffs=[1],
+        available_document_ids={"available"},
+    )
+    assert metrics["HitRate@1"] == 0.0
+    assert metrics["Recall@1"] == 0.0
+    assert per_query.loc[0, "available_relevant_count"] == 0
+    assert per_query.loc[0, "missing_relevant_count"] == 1

@@ -28,7 +28,29 @@ def run_oracle_correction(
             for doc_id, relevance in qrels[str(query_id)].items()
             if int(relevance) > 0
         }
-        positive_indices = [document_index[doc_id] for doc_id in relevant_ids]
+        available_relevant_ids = relevant_ids.intersection(document_index)
+        positive_indices = [document_index[doc_id] for doc_id in available_relevant_ids]
+        if not positive_indices:
+            failure_group = "hard_miss"
+            for lambda_ in lambdas:
+                row = {
+                    "query_id": str(query_id),
+                    "lambda": float(lambda_),
+                    "relevant_count": len(relevant_ids),
+                    "available_relevant_count": 0,
+                    "missing_relevant_count": len(relevant_ids),
+                    "correction_available": False,
+                    "original_rank": None,
+                    "corrected_rank": None,
+                    "rank_improvement": None,
+                    "failure_group": failure_group,
+                }
+                for cutoff in (5, 10, 20, 100):
+                    row[f"retrieved_relevant_at_{cutoff}"] = 0
+                    row[f"entered_top{cutoff}"] = False
+                    row[f"recall_at_{cutoff}"] = 0.0
+                output.append(row)
+            continue
         original_rank = min(
             int(np.where(baseline_indices[query_index] == index)[0][0]) + 1
             for index in positive_indices
@@ -57,6 +79,9 @@ def run_oracle_correction(
                 "query_id": str(query_id),
                 "lambda": float(lambda_),
                 "relevant_count": len(relevant_ids),
+                "available_relevant_count": len(available_relevant_ids),
+                "missing_relevant_count": len(relevant_ids - available_relevant_ids),
+                "correction_available": True,
                 "original_rank": original_rank,
                 "corrected_rank": corrected_rank,
                 "rank_improvement": (
@@ -74,12 +99,14 @@ def run_oracle_correction(
 
     frame = pd.DataFrame(output)
     if not frame.empty:
-        frame["failure_group"] = frame["original_rank"].map(
-            lambda rank: "hit"
-            if rank <= 10
-            else "near_miss"
-            if rank <= 100
-            else "hard_miss"
-        )
-    return frame
+        def classify(rank):
+            if pd.isna(rank):
+                return "hard_miss"
+            if rank <= 10:
+                return "hit"
+            if rank <= 100:
+                return "near_miss"
+            return "hard_miss"
 
+        frame["failure_group"] = frame["original_rank"].map(classify)
+    return frame

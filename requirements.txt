@@ -1,10 +1,10 @@
-numpy
+numpy>=2.3,<2.6
 pandas
 pyarrow
 pyyaml
 python-dotenv
 requests
-scipy
+scipy>=1.18,<1.19
 matplotlib
 sentence-transformers
 beir

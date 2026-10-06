@@ -36,3 +36,13 @@ def test_qwen_query_and_document_are_asymmetric():
     ]
     assert adapter.provider.inputs[1][1] == ["Beijing is the capital of China."]
     assert np.allclose(np.linalg.norm(q, axis=1), 1.0)
+
+
+def test_e5_query_and_document_use_official_prefixes():
+    adapter = make_adapter()
+    adapter.model_id = "intfloat/e5-base-v2"
+    adapter.adapter = "e5"
+    adapter.encode_queries(["business expense"])
+    adapter.encode_documents(["A deductible business expense"])
+    assert adapter.provider.inputs[0][1] == ["query: business expense"]
+    assert adapter.provider.inputs[1][1] == ["passage: A deductible business expense"]
