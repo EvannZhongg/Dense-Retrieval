@@ -216,6 +216,19 @@ strict alternative is mostly frozen-baseline abstention rather than a useful
 calibration method. Full results are in
 `results/robust_query_calibration_loco/findings.md`.
 
+A final privileged diagnostic tests whether the missing signal is simply the
+actual local ranking boundary. With
+`python scripts/run_local_geometry_gate_loco.py --include-boundary-diagnostic`,
+the gate receives baseline Top-256 scores, projected neighborhood moments, and
+the candidate correction's score response. This requires an initial retrieval
+and is explicitly not deployment-admissible. Despite the extra information,
+it beats frozen NDCG@10 in only 4/16 held-out folds; mean utility NMSE is above
+1 and correlation is near zero for every embedding model. The positive oracle
+gate headroom therefore remains unlearned even from the observed boundary.
+Current evidence supports frozen retrieval as the reliable policy and does not
+justify another prototype, covariance, or boundary-sketch expansion. See
+`results/local_boundary_gate_loco_multimodel/findings.md`.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.

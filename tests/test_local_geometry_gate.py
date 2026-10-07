@@ -26,3 +26,40 @@ def test_threshold_candidates_include_apply_all_and_abstain_all():
     assert values[0] == -np.inf
     assert values[-1] == np.inf
     assert 0.0 in values
+
+
+def test_retrieval_boundary_features_are_finite_and_include_query():
+    documents = np.eye(6, dtype=np.float32)
+    queries = np.asarray(
+        [[0.8, 0.6, 0.0, 0.0, 0.0, 0.0], [0.0, 0.8, 0.6, 0.0, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+    corrected = np.asarray(
+        [[0.6, 0.8, 0.0, 0.0, 0.0, 0.0], [0.0, 0.6, 0.8, 0.0, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+    projection = np.eye(2, 6, dtype=np.float32)
+
+    features = MODULE._retrieval_boundary_features(
+        queries,
+        corrected,
+        documents,
+        projection,
+        top_k=4,
+        batch_size=1,
+    )
+
+    assert features.shape == (2, 20)
+    assert np.array_equal(features[:, :6], queries)
+    assert np.all(np.isfinite(features))
+
+
+def test_utility_prediction_metrics_reward_exact_sign_ranking():
+    target = np.asarray([-0.2, 0.0, 0.1, 0.3])
+
+    metrics = MODULE._utility_prediction_metrics(target, target)
+
+    assert metrics["utility_nmse"] == 0.0
+    assert np.isclose(metrics["utility_correlation"], 1.0)
+    assert metrics["benefit_auc"] == 1.0
+    assert metrics["harm_auc"] == 1.0

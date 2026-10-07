@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from sklearn.linear_model import Ridge
+from sklearn.metrics import roc_auc_score
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -35,6 +36,7 @@ from dense_retrieval.evaluation.ranking import (  # noqa: E402
     evaluate_retrieval,
     top_k_document_ids,
 )
+from dense_retrieval.retrieval.exact import exact_search  # noqa: E402
 
 
 GATE_METHODS = {
@@ -139,6 +141,77 @@ def _gate_features(
     )
 
 
+def _retrieval_boundary_features(
+    queries,
+    corrected_queries_,
+    documents,
+    projection,
+    *,
+    top_k=256,
+    batch_size=32,
+):
+    """Build a privileged, non-deployable summary of the initial ranking."""
+    queries = np.asarray(queries, dtype=np.float32)
+    corrected = np.asarray(corrected_queries_, dtype=np.float32)
+    documents = np.asarray(documents, dtype=np.float32)
+    projection = np.asarray(projection, dtype=np.float32)
+    if queries.ndim != 2 or corrected.shape != queries.shape:
+        raise ValueError("queries and corrected_queries must have equal 2D shape")
+    if documents.ndim != 2 or documents.shape[1] != queries.shape[1]:
+        raise ValueError("documents must match the query embedding dimension")
+    if projection.ndim != 2 or projection.shape[1] != queries.shape[1]:
+        raise ValueError("projection must have shape (rank, embedding_dimension)")
+    if not 1 <= int(top_k) <= len(documents):
+        raise ValueError("top_k must be in [1, number of documents]")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+
+    cutoffs = sorted({min(value, int(top_k)) for value in (10, 50, 100, 256)})
+    rank_positions = sorted(
+        {
+            min(value, int(top_k)) - 1
+            for value in (1, 2, 5, 10, 20, 50, 100, 256)
+        }
+    )
+    batches = []
+    for start in range(0, len(queries), int(batch_size)):
+        stop = min(start + int(batch_size), len(queries))
+        indices, scores = exact_search(
+            queries[start:stop], documents, k=int(top_k)
+        )
+        selected = documents[indices]
+        projected = selected @ projection.T
+        corrected_scores = np.einsum(
+            "bd,bkd->bk", corrected[start:stop], selected, optimize=True
+        )
+        shifts = corrected_scores - scores
+
+        parts = [queries[start:stop], scores[:, rank_positions]]
+        for cutoff in cutoffs:
+            local_scores = scores[:, :cutoff]
+            local_projected = projected[:, :cutoff]
+            local_shifts = shifts[:, :cutoff]
+            parts.extend(
+                [
+                    np.column_stack(
+                        [
+                            np.mean(local_scores, axis=1),
+                            np.std(local_scores, axis=1),
+                            local_scores[:, 0] - local_scores[:, -1],
+                            np.mean(local_shifts, axis=1),
+                            np.std(local_shifts, axis=1),
+                            np.min(local_shifts, axis=1),
+                            np.max(local_shifts, axis=1),
+                        ]
+                    ),
+                    np.mean(local_projected, axis=1),
+                    np.std(local_projected, axis=1),
+                ]
+            )
+        batches.append(np.concatenate(parts, axis=1).astype(np.float32))
+    return np.concatenate(batches, axis=0)
+
+
 def _gated_queries(original, corrected, mask):
     result = np.asarray(original, dtype=np.float32).copy()
     result[np.asarray(mask, dtype=bool)] = np.asarray(corrected, dtype=np.float32)[
@@ -151,6 +224,47 @@ def _thresholds(prediction):
     finite = np.asarray(prediction, dtype=np.float64)
     quantiles = np.quantile(finite, [0.0, 0.25, 0.5, 0.75, 0.9, 0.95, 1.0])
     return np.unique(np.concatenate(([-np.inf, 0.0], quantiles, [np.inf])))
+
+
+def _utility_prediction_metrics(target, prediction):
+    target = np.asarray(target, dtype=np.float64)
+    prediction = np.asarray(prediction, dtype=np.float64)
+    if target.shape != prediction.shape or target.ndim != 1:
+        raise ValueError("target and prediction must be equal one-dimensional arrays")
+    mse = float(np.mean((target - prediction) ** 2))
+    variance = float(np.mean((target - np.mean(target)) ** 2))
+    if variance > 1e-12:
+        nmse = mse / variance
+        prediction_variance = float(
+            np.mean((prediction - np.mean(prediction)) ** 2)
+        )
+        correlation = (
+            float(np.corrcoef(target, prediction)[0, 1])
+            if prediction_variance > 1e-12
+            else np.nan
+        )
+    else:
+        nmse = np.nan
+        correlation = np.nan
+
+    benefit = target > 0
+    harm = target < 0
+    benefit_auc = (
+        float(roc_auc_score(benefit, prediction))
+        if np.any(benefit) and np.any(~benefit)
+        else np.nan
+    )
+    harm_auc = (
+        float(roc_auc_score(harm, -prediction))
+        if np.any(harm) and np.any(~harm)
+        else np.nan
+    )
+    return {
+        "utility_nmse": nmse,
+        "utility_correlation": correlation,
+        "benefit_auc": benefit_auc,
+        "harm_auc": harm_auc,
+    }
 
 
 def run(args):
@@ -333,6 +447,15 @@ def run(args):
                     state["utility_gain"] = (
                         state["corrected_ndcg"] - state["baseline_ndcg"]
                     )
+                    if args.include_boundary_diagnostic:
+                        state["boundary_features"] = _retrieval_boundary_features(
+                            state["queries"],
+                            state["corrected_queries"],
+                            data["documents"],
+                            components,
+                            top_k=args.boundary_top_k,
+                            batch_size=args.boundary_batch_size,
+                        )
 
             held_data = loaded[heldout]
             held_state = split_state[heldout]["test"]
@@ -393,11 +516,19 @@ def run(args):
                 }
             )
 
+            gate_methods = dict(GATE_METHODS)
+            if args.include_boundary_diagnostic:
+                gate_methods["gate_retrieval_boundary_diagnostic"] = (
+                    "retrieval_boundary"
+                )
+
             fold_methods = {}
-            for result_method, feature_method in GATE_METHODS.items():
-                raw_train = {
-                    name: _gate_features(
-                        loaded[name]["train_queries"],
+            for result_method, feature_method in gate_methods.items():
+                def raw_features(name, split):
+                    if feature_method == "retrieval_boundary":
+                        return split_state[name][split]["boundary_features"]
+                    return _gate_features(
+                        loaded[name][f"{split}_queries"],
                         feature_method,
                         local_geometries[name],
                         reference,
@@ -406,7 +537,13 @@ def run(args):
                         local_moments[name],
                         reference_moments,
                     )
+
+                raw_train = {
+                    name: raw_features(name, "train")
                     for name in train_names
+                }
+                raw_dev = {
+                    name: raw_features(name, "dev") for name in train_names
                 }
                 center, scale = _fit_normalizer(raw_train)
                 train_x = np.concatenate(
@@ -432,19 +569,8 @@ def run(args):
                     for threshold in _thresholds(train_prediction):
                         corpus_scores = []
                         for name in train_names:
-                            data = loaded[name]
-                            raw_dev = _gate_features(
-                                data["dev_queries"],
-                                feature_method,
-                                local_geometries[name],
-                                reference,
-                                components,
-                                args,
-                                local_moments[name],
-                                reference_moments,
-                            )
                             prediction = model.predict(
-                                _normalize(raw_dev, center, scale)
+                                _normalize(raw_dev[name], center, scale)
                             )
                             state = split_state[name]["dev"]
                             chosen = np.where(
@@ -471,16 +597,7 @@ def run(args):
                             best_model = model
                             best_threshold = float(threshold)
 
-                held_raw = _gate_features(
-                    held_data["test_queries"],
-                    feature_method,
-                    local_geometries[heldout],
-                    reference,
-                    components,
-                    args,
-                    local_moments[heldout],
-                    reference_moments,
-                )
+                held_raw = raw_features(heldout, "test")
                 held_prediction = best_model.predict(
                     _normalize(held_raw, center, scale)
                 )
@@ -511,6 +628,9 @@ def run(args):
                         "applied_harm_rate": (
                             float(np.mean(applied_gain < 0)) if np.any(mask) else np.nan
                         ),
+                        **_utility_prediction_metrics(
+                            held_state["utility_gain"], held_prediction
+                        ),
                         **metrics,
                     }
                 )
@@ -539,6 +659,14 @@ def run(args):
                     "prototype_fit_is_document_only": True,
                     "heldout_qrels_used_for_training_or_selection": False,
                     "heldout_oracle_gate_is_diagnostic_only": True,
+                    "include_boundary_diagnostic": args.include_boundary_diagnostic,
+                    "boundary_top_k": (
+                        args.boundary_top_k
+                        if args.include_boundary_diagnostic
+                        else None
+                    ),
+                    "boundary_requires_initial_retrieval": args.include_boundary_diagnostic,
+                    "boundary_deployment_admissible": False,
                     "methods": fold_methods,
                 }
             )
@@ -585,6 +713,9 @@ def build_parser():
     parser.add_argument("--assignment-batch-size", type=int, default=4096)
     parser.add_argument("--include-cell-moments", action="store_true")
     parser.add_argument("--max-moment-documents", type=int, default=5000)
+    parser.add_argument("--include-boundary-diagnostic", action="store_true")
+    parser.add_argument("--boundary-top-k", type=int, default=256)
+    parser.add_argument("--boundary-batch-size", type=int, default=32)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lambdas", nargs="+", type=float, default=DEFAULT_LAMBDAS)
     parser.add_argument("--random-state", type=int, default=0)
