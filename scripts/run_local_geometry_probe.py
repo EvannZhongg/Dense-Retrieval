@@ -23,8 +23,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from dense_retrieval.analysis.local_geometry import (  # noqa: E402
     CorpusPrototypeGeometry,
-    prototype_counts,
-    query_local_geometry_features,
+    fit_reference_geometry,
+    query_correction_features,
 )
 from dense_retrieval.analysis.query_correction import (  # noqa: E402
     build_oracle_deltas,
@@ -118,47 +118,16 @@ def _load_or_fit_geometry(output_dir, model_key, corpus_name, documents, args):
     return geometry
 
 
-def _fit_reference_geometry(train_names, loaded, args, fold_seed):
-    rng = np.random.default_rng(fold_seed)
-    per_corpus = max(args.max_fit_documents // len(train_names), args.n_prototypes)
-    samples = []
-    for name in train_names:
-        documents = loaded[name]["documents"]
-        size = min(per_corpus, len(documents))
-        rows = np.sort(rng.choice(len(documents), size=size, replace=False))
-        samples.append(np.asarray(documents[rows]))
-    fit_documents = np.concatenate(samples)
-    sampled = CorpusPrototypeGeometry.fit(
-        fit_documents,
-        n_prototypes=args.n_prototypes,
-        max_fit_documents=len(fit_documents),
-        max_iter=args.prototype_max_iter,
-        random_state=fold_seed,
-        assignment_batch_size=args.assignment_batch_size,
-    )
-    counts = np.zeros(len(sampled.prototypes), dtype=np.int64)
-    for name in train_names:
-        counts += prototype_counts(
-            loaded[name]["documents"],
-            sampled.prototypes,
-            batch_size=args.assignment_batch_size,
-        )
-    return CorpusPrototypeGeometry(sampled.prototypes, counts)
-
-
 def _feature_matrix(queries, method, local_geometry, reference_geometry, components, args):
-    query_values = np.asarray(queries, dtype=np.float32)
-    if method == "q_only":
-        return query_values
-    geometry = reference_geometry if method == "reference_geometry" else local_geometry
-    local = query_local_geometry_features(
-        query_values,
-        geometry,
+    return query_correction_features(
+        queries,
+        method,
+        local_geometry,
+        reference_geometry,
         components,
-        top_m=min(args.top_m, len(geometry.prototypes)),
+        top_m=args.top_m,
         temperature=args.temperature,
     )
-    return np.concatenate([query_values, local], axis=1)
 
 
 def run(args):
@@ -212,11 +181,13 @@ def run(args):
             _mean, components = fit_zero_origin_pca_subspace(
                 pooled_deltas, args.rank
             )
-            reference_geometry = _fit_reference_geometry(
-                train_names,
-                loaded,
-                args,
-                args.random_state + 1009 * (fold_index + 1),
+            reference_geometry = fit_reference_geometry(
+                {name: loaded[name]["documents"] for name in train_names},
+                n_prototypes=args.n_prototypes,
+                max_fit_documents=args.max_fit_documents,
+                max_iter=args.prototype_max_iter,
+                random_state=args.random_state + 1009 * (fold_index + 1),
+                assignment_batch_size=args.assignment_batch_size,
             )
 
             train_targets = {}

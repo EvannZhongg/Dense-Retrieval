@@ -1,0 +1,318 @@
+[
+  {
+    "model": "text-embedding-3-small-aiberm",
+    "heldout_corpus": "fiqa",
+    "training_corpora": [
+      "arguana",
+      "scifact",
+      "nfcorpus"
+    ],
+    "rank": 32,
+    "n_prototypes": 16,
+    "top_m": 8,
+    "geometry_temperature": 0.07,
+    "hard_negatives": 32,
+    "ranking_temperature": 0.05,
+    "epochs": 4,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "coordinate_penalty": 0.1,
+    "train_lambdas": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "lambda_grid": [
+      0.0,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "negative_refresh": "static_frozen_baseline_topk",
+    "prototype_fit_is_document_only": true,
+    "heldout_qrels_used_for_training_or_selection": false,
+    "methods": {
+      "rank_q_only": {
+        "feature_dimension": 1536,
+        "parameter_count": 49184,
+        "loss_history": [
+          2.0660884703199067,
+          1.266304189960162,
+          1.4161286801099777,
+          1.114517127474149
+        ],
+        "selected_lambda": 0.05,
+        "device": "cuda:0"
+      },
+      "rank_reference_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          2.064172844092051,
+          1.263278936346372,
+          1.407993624607722,
+          1.1112710324426491
+        ],
+        "selected_lambda": 0.05,
+        "device": "cuda:0"
+      },
+      "rank_corpus_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          2.0604038884242377,
+          1.2601371705532074,
+          1.4062242607275646,
+          1.109675444662571
+        ],
+        "selected_lambda": 0.05,
+        "device": "cuda:0"
+      }
+    }
+  },
+  {
+    "model": "text-embedding-3-small-aiberm",
+    "heldout_corpus": "arguana",
+    "training_corpora": [
+      "fiqa",
+      "scifact",
+      "nfcorpus"
+    ],
+    "rank": 32,
+    "n_prototypes": 16,
+    "top_m": 8,
+    "geometry_temperature": 0.07,
+    "hard_negatives": 32,
+    "ranking_temperature": 0.05,
+    "epochs": 4,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "coordinate_penalty": 0.1,
+    "train_lambdas": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "lambda_grid": [
+      0.0,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "negative_refresh": "static_frozen_baseline_topk",
+    "prototype_fit_is_document_only": true,
+    "heldout_qrels_used_for_training_or_selection": false,
+    "methods": {
+      "rank_q_only": {
+        "feature_dimension": 1536,
+        "parameter_count": 49184,
+        "loss_history": [
+          1.4479007212690604,
+          1.1317149920519007,
+          1.065839216459629,
+          0.9545892660700998
+        ],
+        "selected_lambda": 0.0,
+        "device": "cuda:0"
+      },
+      "rank_reference_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          1.4485885015753812,
+          1.1296245504257292,
+          1.0623730624368948,
+          0.9515698071598082
+        ],
+        "selected_lambda": 0.0,
+        "device": "cuda:0"
+      },
+      "rank_corpus_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          1.449353168408076,
+          1.1293546917826631,
+          1.0624527500350347,
+          0.9512472919715468
+        ],
+        "selected_lambda": 0.0,
+        "device": "cuda:0"
+      }
+    }
+  },
+  {
+    "model": "text-embedding-3-small-aiberm",
+    "heldout_corpus": "scifact",
+    "training_corpora": [
+      "fiqa",
+      "arguana",
+      "nfcorpus"
+    ],
+    "rank": 32,
+    "n_prototypes": 16,
+    "top_m": 8,
+    "geometry_temperature": 0.07,
+    "hard_negatives": 32,
+    "ranking_temperature": 0.05,
+    "epochs": 4,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "coordinate_penalty": 0.1,
+    "train_lambdas": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "lambda_grid": [
+      0.0,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "negative_refresh": "static_frozen_baseline_topk",
+    "prototype_fit_is_document_only": true,
+    "heldout_qrels_used_for_training_or_selection": false,
+    "methods": {
+      "rank_q_only": {
+        "feature_dimension": 1536,
+        "parameter_count": 49184,
+        "loss_history": [
+          2.0599750444408533,
+          1.7696437405985455,
+          1.6528812210227168,
+          1.5275117939756822
+        ],
+        "selected_lambda": 0.05,
+        "device": "cuda:0"
+      },
+      "rank_reference_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          2.05717903029087,
+          1.7663761790870696,
+          1.649710751781168,
+          1.5241009939548582
+        ],
+        "selected_lambda": 0.05,
+        "device": "cuda:0"
+      },
+      "rank_corpus_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          2.054941849653111,
+          1.7623159689034602,
+          1.646111431972001,
+          1.519631332667299
+        ],
+        "selected_lambda": 0.05,
+        "device": "cuda:0"
+      }
+    }
+  },
+  {
+    "model": "text-embedding-3-small-aiberm",
+    "heldout_corpus": "nfcorpus",
+    "training_corpora": [
+      "fiqa",
+      "arguana",
+      "scifact"
+    ],
+    "rank": 32,
+    "n_prototypes": 16,
+    "top_m": 8,
+    "geometry_temperature": 0.07,
+    "hard_negatives": 32,
+    "ranking_temperature": 0.05,
+    "epochs": 4,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "coordinate_penalty": 0.1,
+    "train_lambdas": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "lambda_grid": [
+      0.0,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "negative_refresh": "static_frozen_baseline_topk",
+    "prototype_fit_is_document_only": true,
+    "heldout_qrels_used_for_training_or_selection": false,
+    "methods": {
+      "rank_q_only": {
+        "feature_dimension": 1536,
+        "parameter_count": 49184,
+        "loss_history": [
+          2.105797379515892,
+          1.8395932672559754,
+          1.6662849224815073,
+          1.5966712892517563
+        ],
+        "selected_lambda": 0.05,
+        "device": "cuda:0"
+      },
+      "rank_reference_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          2.104061261628025,
+          1.8359413211659867,
+          1.662905022155407,
+          1.5920951978642812
+        ],
+        "selected_lambda": 0.0,
+        "device": "cuda:0"
+      },
+      "rank_corpus_geometry": {
+        "feature_dimension": 1606,
+        "parameter_count": 51424,
+        "loss_history": [
+          2.101053376299466,
+          1.8329587786696677,
+          1.6606532954430395,
+          1.5895537297393
+        ],
+        "selected_lambda": 0.0,
+        "device": "cuda:0"
+      }
+    }
+  }
+]

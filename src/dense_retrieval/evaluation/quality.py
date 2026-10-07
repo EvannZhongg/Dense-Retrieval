@@ -69,13 +69,17 @@ def compute_quality_metrics(
             row[f"hit_at_{cutoff}"] = retrieved_count > 0
             row[f"recall_at_{cutoff}"] = retrieved_count / len(relevant)
 
-        reciprocal_ranks.append(
+        reciprocal_rank = (
             1.0 / best_rank if best_rank is not None and best_rank <= 10 else 0.0
         )
         gains = [relevant.get(doc_id, 0) for doc_id in ranking[:10]]
         ideal = sorted(relevant.values(), reverse=True)[:10]
         ideal_dcg = _dcg(ideal)
-        ndcg_values.append(_dcg(gains) / ideal_dcg if ideal_dcg else 0.0)
+        ndcg_at_10 = _dcg(gains) / ideal_dcg if ideal_dcg else 0.0
+        row["reciprocal_rank_at_10"] = reciprocal_rank
+        row["ndcg_at_10"] = ndcg_at_10
+        reciprocal_ranks.append(reciprocal_rank)
+        ndcg_values.append(ndcg_at_10)
         rows.append(row)
 
     frame = pd.DataFrame(rows)

@@ -1,6 +1,7 @@
 """Permutation-invariant query-relative geometry from corpus-local prototypes."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -164,8 +165,81 @@ def query_local_geometry_features(
     return np.concatenate([mean, variance, scalars], axis=1).astype(np.float32)
 
 
+def fit_reference_geometry(
+    document_embeddings: Mapping[str, np.ndarray],
+    *,
+    n_prototypes: int,
+    max_fit_documents: int,
+    max_iter: int,
+    random_state: int,
+    assignment_batch_size: int = 4096,
+) -> CorpusPrototypeGeometry:
+    """Fit one query-only control codebook from training corpora only."""
+    if not document_embeddings:
+        raise ValueError("document_embeddings must not be empty")
+    rng = np.random.default_rng(random_state)
+    per_corpus = max(
+        int(max_fit_documents) // len(document_embeddings), int(n_prototypes)
+    )
+    samples = []
+    for name in sorted(document_embeddings):
+        documents = _normalized_rows(document_embeddings[name], str(name))
+        size = min(per_corpus, len(documents))
+        rows = np.sort(rng.choice(len(documents), size=size, replace=False))
+        samples.append(documents[rows])
+    fit_documents = np.concatenate(samples)
+    sampled = CorpusPrototypeGeometry.fit(
+        fit_documents,
+        n_prototypes=n_prototypes,
+        max_fit_documents=len(fit_documents),
+        max_iter=max_iter,
+        random_state=random_state,
+        assignment_batch_size=assignment_batch_size,
+    )
+    counts = np.zeros(len(sampled.prototypes), dtype=np.int64)
+    for name in sorted(document_embeddings):
+        counts += prototype_counts(
+            document_embeddings[name],
+            sampled.prototypes,
+            batch_size=assignment_batch_size,
+        )
+    return CorpusPrototypeGeometry(sampled.prototypes, counts)
+
+
+def query_correction_features(
+    query_embeddings: np.ndarray,
+    method: str,
+    local_geometry: CorpusPrototypeGeometry,
+    reference_geometry: CorpusPrototypeGeometry,
+    projection: np.ndarray,
+    *,
+    top_m: int,
+    temperature: float,
+) -> np.ndarray:
+    """Build matched q-only, reference, or corpus-local correction features."""
+    queries = np.asarray(query_embeddings, dtype=np.float32)
+    if method == "q_only":
+        return queries
+    if method == "reference_geometry":
+        geometry = reference_geometry
+    elif method == "corpus_geometry":
+        geometry = local_geometry
+    else:
+        raise ValueError(f"unknown feature method: {method}")
+    local = query_local_geometry_features(
+        queries,
+        geometry,
+        projection,
+        top_m=min(top_m, len(geometry.prototypes)),
+        temperature=temperature,
+    )
+    return np.concatenate([queries, local], axis=1)
+
+
 __all__ = [
     "CorpusPrototypeGeometry",
     "prototype_counts",
     "query_local_geometry_features",
+    "fit_reference_geometry",
+    "query_correction_features",
 ]

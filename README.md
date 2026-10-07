@@ -166,6 +166,23 @@ evidence of corpus-specific incremental information. The held-out corpus qrels
 are used for final target evaluation only, never for prototype fitting, feature
 normalization, predictor fitting, or alpha selection.
 
+Two follow-up falsification studies use the same strict LOCO protocol:
+
+- `python scripts/run_local_geometry_rank_loco.py` trains a zero-initialized
+  linear correction directly with frozen-corpus ranking loss. This tests
+  whether the nearest-positive regression target, rather than the geometry
+  representation, caused the failed retrieval transfer.
+- `python scripts/run_local_geometry_gate_loco.py` fixes one shared query-only
+  correction direction and asks q-only, fixed-reference, and corpus-local ridge
+  gates to predict whether applying it improves per-query NDCG@10. It also
+  reports a held-out oracle gate strictly as a diagnostic upper bound.
+
+For `text-embedding-3-small`, direct ranking alignment lowers training loss but
+does not improve held-out retrieval. The oracle benefit gate has positive
+headroom in all four held-out corpora, while every learned gate fails to recover
+it. The current evidence therefore locates the bottleneck in transferable
+benefit prediction rather than correction-space capacity.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.

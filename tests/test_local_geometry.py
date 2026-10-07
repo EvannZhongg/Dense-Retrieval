@@ -7,7 +7,9 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
 from dense_retrieval.analysis.local_geometry import (
     CorpusPrototypeGeometry,
+    fit_reference_geometry,
     prototype_counts,
+    query_correction_features,
     query_local_geometry_features,
 )
 
@@ -57,3 +59,37 @@ def test_local_features_change_with_corpus_geometry():
     )
 
     assert not np.allclose(first_features, second_features)
+
+
+def test_reference_geometry_and_feature_controls_are_well_formed():
+    documents = {
+        "a": np.asarray([[1.0, 0.0], [0.8, 0.2]]),
+        "b": np.asarray([[0.0, 1.0], [0.2, 0.8]]),
+    }
+    reference = fit_reference_geometry(
+        documents,
+        n_prototypes=2,
+        max_fit_documents=4,
+        max_iter=5,
+        random_state=3,
+        assignment_batch_size=2,
+    )
+    local = CorpusPrototypeGeometry(documents["a"], [1, 1])
+    queries = np.asarray([[1.0, 0.0]])
+
+    q_only = query_correction_features(
+        queries, "q_only", local, reference, np.eye(2), top_m=2, temperature=0.1
+    )
+    corpus = query_correction_features(
+        queries,
+        "corpus_geometry",
+        local,
+        reference,
+        np.eye(2),
+        top_m=2,
+        temperature=0.1,
+    )
+
+    assert q_only.shape == (1, 2)
+    assert corpus.shape == (1, 12)
+    assert np.isclose(reference.occupancy.sum(), 1.0)
