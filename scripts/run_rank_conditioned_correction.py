@@ -15,16 +15,21 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
 from dotenv import load_dotenv
-from torch import nn
-from torch.nn import functional as F
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from dense_retrieval.analysis.prototype_correction import (  # noqa: E402
-    project_correction_targets,
+from dense_retrieval.analysis.ranking_correction import (  # noqa: E402
+    _apply,
+    build_rank_records,
+    corpus_sketch,
+    fit_feature_normalizer,
+    multi_positive_hard_negative_loss,
+    normalize_features,
+    predict_model,
+    select_lambda,
+    train_rank_model,
 )
 from dense_retrieval.analysis.shared_anchors import SharedAnchorCodebook  # noqa: E402
 from dense_retrieval.analysis.study_data import (  # noqa: E402
@@ -37,253 +42,9 @@ from dense_retrieval.analysis.query_correction import (  # noqa: E402
 )
 from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402
 from dense_retrieval.evaluation.ranking import evaluate_retrieval  # noqa: E402
-from dense_retrieval.retrieval.exact import exact_search  # noqa: E402
 
 
 METHODS = ["baseline", "rank_q_only", "rank_corpus_sketch"]
-
-
-class CorrectionMLP(nn.Module):
-    def __init__(self, input_dimension: int, rank: int):
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_dimension, 256),
-            nn.ReLU(),
-            nn.Linear(256, rank),
-        )
-
-    def forward(self, values):
-        return self.network(values)
-
-
-def corpus_sketch(queries, codebook, occupancy):
-    """Return flattened Top-M per-anchor query-relative corpus features.
-
-    Unlike a pooled anchor vector, this preserves which fixed semantic cells
-    are dense in the current corpus. ``codebook.projection`` is the shared
-    B128 basis, so each row contains ``[B.T(u_k-q), q.u_k, log(p_D,k)]``.
-    """
-    features = codebook.query_features(queries, occupancy)
-    return features.values.reshape(len(features.values), -1).astype(np.float32)
-
-
-def fit_feature_normalizer(values):
-    """Fit per-column robust scaling using training sketches only."""
-    values = np.asarray(values, dtype=np.float64)
-    center = np.median(values, axis=0)
-    scale = np.median(np.abs(values - center), axis=0) * 1.4826
-    scale = np.where(scale > 1e-6, scale, 1.0)
-    return center.astype(np.float32), scale.astype(np.float32)
-
-
-def normalize_features(values, center, scale):
-    return np.clip(
-        (np.asarray(values, dtype=np.float32) - center) / scale, -8.0, 8.0
-    ).astype(np.float32)
-
-
-def build_rank_records(dataset, query_embeddings, documents, hard_k):
-    """Build positive/all-hard-negative index arrays for one corpus."""
-    document_index = {str(doc_id): row for row, doc_id in enumerate(dataset.corpus)}
-    positives = []
-    negatives = []
-    kept_rows = []
-    hard_indices, _ = exact_search(query_embeddings, documents, min(hard_k + 32, len(documents)))
-    for row, sample in enumerate(dataset.queries):
-        positive = [
-            document_index[str(doc_id)]
-            for doc_id, relevance in dataset.qrels[str(sample.query_id)].items()
-            if int(relevance) > 0 and str(doc_id) in document_index
-        ]
-        if not positive:
-            continue
-        positive_set = set(positive)
-        negative = [int(index) for index in hard_indices[row] if int(index) not in positive_set]
-        if not negative:
-            continue
-        kept_rows.append(row)
-        positives.append(positive)
-        negatives.append(negative[:hard_k])
-    if not kept_rows:
-        raise ValueError(f"{dataset.name}: no train queries with positives and negatives")
-    max_positive = max(map(len, positives))
-    max_negative = max(map(len, negatives))
-    positive_array = np.full((len(kept_rows), max_positive), -1, dtype=np.int64)
-    negative_array = np.full((len(kept_rows), max_negative), -1, dtype=np.int64)
-    for row, values in enumerate(positives):
-        positive_array[row, : len(values)] = values
-    for row, values in enumerate(negatives):
-        negative_array[row, : len(values)] = values
-    return {
-        "query_rows": np.asarray(kept_rows, dtype=np.int64),
-        "positive_indices": positive_array,
-        "negative_indices": negative_array,
-    }
-
-
-def train_rank_model(
-    corpora,
-    mean,
-    components,
-    *,
-    use_sketch,
-    epochs,
-    batch_size,
-    train_lambdas,
-    temperature,
-    learning_rate,
-    weight_decay,
-    random_state,
-    hard_negatives,
-    device="auto",
-):
-    torch.manual_seed(random_state)
-    device = torch.device(
-        "cuda" if device == "auto" and torch.cuda.is_available() else device
-        if device != "auto" else "cpu"
-    )
-    dimension = next(iter(corpora.values()))["train_queries"].shape[1]
-    rank = components.shape[0]
-    sketch_dimension = next(iter(corpora.values()))["train_sketches"].shape[1]
-    model = CorrectionMLP(dimension + sketch_dimension, rank).to(device)
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
-    )
-    mean_tensor = torch.from_numpy(mean.astype(np.float32)).to(device)
-    components_tensor = torch.from_numpy(components.astype(np.float32)).to(device)
-    losses = []
-    corpus_items = list(corpora.items())
-    for epoch in range(epochs):
-        epoch_losses = []
-        # Refresh the competition set with the current model.  This prevents the
-        # predictor from only learning to avoid a stale first-pass top-k list.
-        for corpus_index, (name, data) in enumerate(corpus_items):
-            q = data["train_queries"]
-            sketch = data["train_sketches"]
-            features = np.concatenate(
-                [q, sketch if use_sketch else np.zeros_like(sketch)], axis=1
-            )
-            with torch.no_grad():
-                coordinates = model(torch.from_numpy(features.astype(np.float32)).to(device))
-                deltas = mean_tensor + coordinates @ components_tensor
-            probe = _apply(q, deltas.cpu().numpy(), max(train_lambdas))
-            data["rank_records"] = build_rank_records(
-                data["train_dataset"], probe, data["documents"], hard_negatives
-            )
-
-        # Round-robin batches give each corpus the same number of optimizer
-        # updates per epoch; smaller corpora are cycled with replacement.
-        batch_orders = []
-        max_batches = 0
-        for corpus_index, (_, data) in enumerate(corpus_items):
-            rng = np.random.default_rng(random_state + epoch * 1009 + corpus_index)
-            records = data["rank_records"]
-            order = rng.permutation(len(records["query_rows"]))
-            batch_orders.append(order)
-            max_batches = max(max_batches, int(np.ceil(len(order) / batch_size)))
-        for batch_id in range(max_batches):
-            for corpus_index, (_, data) in enumerate(corpus_items):
-                records = data["rank_records"]
-                order = batch_orders[corpus_index]
-                if len(order) == 0:
-                    continue
-                positions = (np.arange(batch_size) + batch_id * batch_size) % len(order)
-                selected = order[positions]
-                q = data["train_queries"][records["query_rows"][selected]]
-                sketch = data["train_sketches"][records["query_rows"][selected]]
-                features = np.concatenate(
-                    [q, sketch if use_sketch else np.zeros_like(sketch)], axis=1
-                )
-                q_tensor = torch.from_numpy(q.astype(np.float32)).to(device)
-                features_tensor = torch.from_numpy(features.astype(np.float32)).to(device)
-                positive_indices = records["positive_indices"][selected]
-                negative_indices = records["negative_indices"][selected]
-                positive_docs = torch.from_numpy(
-                    data["documents"][positive_indices].astype(np.float32)
-                ).to(device)
-                negative_docs = torch.from_numpy(
-                    data["documents"][negative_indices].astype(np.float32)
-                ).to(device)
-                coordinates = model(features_tensor)
-                deltas = mean_tensor + coordinates @ components_tensor
-                lambda_ = float(rng.choice(train_lambdas))
-                corrected = q_tensor + lambda_ * deltas
-                corrected = F.normalize(corrected, dim=1)
-                positive_scores = torch.einsum("bd,bpd->bp", corrected, positive_docs)
-                negative_scores = torch.einsum("bd,bnd->bn", corrected, negative_docs)
-                loss = multi_positive_hard_negative_loss(
-                    positive_scores,
-                    negative_scores,
-                    torch.from_numpy(positive_indices >= 0).to(device),
-                    torch.from_numpy(negative_indices >= 0).to(device),
-                    temperature=temperature,
-                )
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                epoch_losses.append(float(loss.detach()))
-        losses.append(float(np.mean(epoch_losses)))
-    return model, losses
-
-
-def multi_positive_hard_negative_loss(
-    positive_scores,
-    negative_scores,
-    positive_mask,
-    negative_mask,
-    *,
-    temperature: float = 0.05,
-):
-    """Compute a temperature-scaled masked multi-positive log-softmax loss."""
-    if temperature <= 0 or not np.isfinite(temperature):
-        raise ValueError("temperature must be finite and positive")
-    positive_scores = positive_scores / float(temperature)
-    negative_scores = negative_scores / float(temperature)
-    positive_scores = positive_scores.masked_fill(~positive_mask, -torch.inf)
-    negative_scores = negative_scores.masked_fill(~negative_mask, -torch.inf)
-    numerator = torch.logsumexp(positive_scores, dim=1)
-    denominator = torch.logsumexp(
-        torch.cat([positive_scores, negative_scores], dim=1), dim=1
-    )
-    return -(numerator - denominator).mean()
-
-
-def predict_model(model, queries, sketches, mean, components, use_sketch):
-    features = np.concatenate(
-        [queries, sketches if use_sketch else np.zeros_like(sketches)], axis=1
-    )
-    device = next(model.parameters()).device
-    with torch.no_grad():
-        coordinates = model(torch.from_numpy(features.astype(np.float32)).to(device)).cpu().numpy()
-    return mean + coordinates @ components
-
-
-def select_lambda(corpora, predictor, lambdas, batch_size):
-    rows = []
-    for lambda_ in lambdas:
-        values = []
-        for name, data in corpora.items():
-            metrics = evaluate_retrieval(
-                data["dev_dataset"],
-                _apply(data["dev_queries"], predictor(name, "dev"), lambda_),
-                data["documents"],
-                batch_size,
-            )
-            values.append(metrics["HitRate@10"])
-            rows.append({"dataset": name, "lambda": lambda_, **metrics})
-        rows.append(
-            {"dataset": "macro", "lambda": lambda_, "HitRate@10": float(np.mean(values))}
-        )
-    frame = pd.DataFrame(rows)
-    macro = frame[frame.dataset == "macro"]
-    selected = float(macro.loc[macro["HitRate@10"].idxmax(), "lambda"])
-    return selected, frame
-
-
-def _apply(queries, deltas, lambda_):
-    corrected = np.asarray(queries, dtype=np.float64) + float(lambda_) * deltas
-    corrected /= np.maximum(np.linalg.norm(corrected, axis=1, keepdims=True), 1e-12)
-    return corrected.astype(np.float32)
 
 
 def run(args):

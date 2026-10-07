@@ -8,7 +8,6 @@ one final retrieval evaluation.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -24,29 +23,19 @@ from dense_retrieval.analysis.query_correction import (  # noqa: E402
     build_oracle_deltas,
     fit_zero_origin_pca_subspace,
 )
+from dense_retrieval.analysis.ranking_correction import (  # noqa: E402
+    _apply,
+    build_rank_records,
+    corpus_sketch,
+    fit_feature_normalizer,
+    normalize_features,
+    predict_model,
+    train_rank_model,
+)
 from dense_retrieval.analysis.shared_anchors import SharedAnchorCodebook  # noqa: E402
 from dense_retrieval.analysis.study_data import DEFAULT_LAMBDAS, prepare_three_way  # noqa: E402
 from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402
 from dense_retrieval.evaluation.ranking import evaluate_retrieval  # noqa: E402
-
-
-RANK_SCRIPT = ROOT / "scripts" / "run_rank_conditioned_correction.py"
-_SPEC = importlib.util.spec_from_file_location("rank_conditioned_correction", RANK_SCRIPT)
-_RANK = importlib.util.module_from_spec(_SPEC)
-assert _SPEC.loader is not None
-_SPEC.loader.exec_module(_RANK)
-
-
-def _normalize_features(values, center, scale):
-    return np.clip((np.asarray(values, dtype=np.float32) - center) / scale, -8.0, 8.0)
-
-
-def _fit_scale(values):
-    values = np.asarray(values, dtype=np.float64)
-    center = np.median(values, axis=0)
-    scale = np.median(np.abs(values - center), axis=0) * 1.4826
-    scale = np.where(scale > 1e-6, scale, 1.0)
-    return center.astype(np.float32), scale.astype(np.float32)
 
 
 def run(args):
@@ -107,11 +96,11 @@ def run(args):
             corpora = {}
             for name in train_names:
                 data = loaded[name]
-                records = _RANK.build_rank_records(
+                records = build_rank_records(
                     data["train_dataset"], data["train_queries"], data["documents"], args.hard_negatives
                 )
                 sketches = {
-                    split: _RANK.corpus_sketch(data[f"{split}_queries"], projected, occupancies[name])
+                    split: corpus_sketch(data[f"{split}_queries"], projected, occupancies[name])
                     for split in ("train", "dev", "test")
                 }
                 corpora[name] = {
@@ -122,27 +111,27 @@ def run(args):
                 }
             held_data = loaded[heldout]
             held_sketches = {
-                split: _RANK.corpus_sketch(held_data[f"{split}_queries"], projected, occupancies[heldout])
+                split: corpus_sketch(held_data[f"{split}_queries"], projected, occupancies[heldout])
                 for split in ("train", "dev", "test")
             }
-            center, scale = _fit_scale(
+            center, scale = fit_feature_normalizer(
                 np.concatenate([corpora[name]["train_sketches"] for name in train_names])
             )
             for name in train_names:
                 corpora[name]["sketches"] = {
-                    split: _normalize_features(value, center, scale)
+                    split: normalize_features(value, center, scale)
                     for split, value in corpora[name]["sketches"].items()
                 }
                 corpora[name]["train_sketches"] = corpora[name]["sketches"]["train"]
             held_sketches = {
-                split: _normalize_features(value, center, scale)
+                split: normalize_features(value, center, scale)
                 for split, value in held_sketches.items()
             }
 
             models = {}
             loss_history = {}
             for method, use_sketch in (("rank_q_only", False), ("rank_corpus_sketch", True)):
-                model, losses = _RANK.train_rank_model(
+                model, losses = train_rank_model(
                     corpora, mean, components, use_sketch=use_sketch,
                     epochs=args.epochs, batch_size=args.batch_size,
                     train_lambdas=args.train_lambdas, temperature=args.temperature,
@@ -160,12 +149,12 @@ def run(args):
                     values = []
                     for name in train_names:
                         data = corpora[name]
-                        deltas = _RANK.predict_model(
+                        deltas = predict_model(
                             model, data["dev_queries"], data["sketches"]["dev"],
                             mean, components, use_sketch
                         )
                         metrics = evaluate_retrieval(
-                            data["dev_dataset"], _RANK._apply(data["dev_queries"], deltas, lambda_),
+                            data["dev_dataset"], _apply(data["dev_queries"], deltas, lambda_),
                             data["documents"], args.batch_size
                         )
                         values.append(metrics["HitRate@10"])
@@ -177,12 +166,12 @@ def run(args):
             )
             rows.append({"dataset": heldout, "model": model_key, "method": "baseline", "selected_lambda": 0.0, **baseline})
             for method, (model, use_sketch) in models.items():
-                deltas = _RANK.predict_model(
+                deltas = predict_model(
                     model, held_data["test_queries"], held_sketches["test"], mean, components, use_sketch
                 )
                 metrics = evaluate_retrieval(
                     held_data["test_dataset"],
-                    _RANK._apply(held_data["test_queries"], deltas, selected[method]),
+                    _apply(held_data["test_queries"], deltas, selected[method]),
                     held_data["documents"], args.batch_size,
                 )
                 rows.append({

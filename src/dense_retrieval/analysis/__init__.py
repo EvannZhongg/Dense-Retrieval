@@ -23,6 +23,17 @@ from .query_correction import (
     project_deltas,
     select_oracle_positives,
 )
+from .ranking_correction import (
+    CorrectionMLP,
+    build_rank_records,
+    corpus_sketch,
+    fit_feature_normalizer,
+    multi_positive_hard_negative_loss,
+    normalize_features,
+    predict_model,
+    select_lambda,
+    train_rank_model,
+)
 from .shared_anchors import (
     CorpusAnchorOccupancy,
     QueryAnchorFeatures,
@@ -59,6 +70,15 @@ __all__ = [
     "prepare_correction_data",
     "project_deltas",
     "select_oracle_positives",
+    "CorrectionMLP",
+    "build_rank_records",
+    "corpus_sketch",
+    "fit_feature_normalizer",
+    "normalize_features",
+    "multi_positive_hard_negative_loss",
+    "predict_model",
+    "select_lambda",
+    "train_rank_model",
     "CorpusAnchorOccupancy",
     "QueryAnchorFeatures",
     "SharedAnchorCodebook",
