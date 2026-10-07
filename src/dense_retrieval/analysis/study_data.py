@@ -14,7 +14,7 @@ import numpy as np
 from ..datasets import RetrievalDataset, load_beir_dataset
 from ..datasets.splits import rows_for_queries
 from ..embeddings import MODEL_SPECS, create_embedding_model
-from ..embeddings.cache import cached_encode_queries
+from ..embeddings.cache import cached_encode_queries, find_query_cache_path
 from .query_correction import load_model_config, prepare_correction_data
 
 
@@ -77,7 +77,7 @@ def prepare_three_way(
     )
     if dataset_name == "fiqa":
         dev_dataset = load_beir_dataset("fiqa", datasets_root, "dev", False)
-        dev_path = cache_dir / "queries_dev.npy"
+        dev_path = find_query_cache_path(cache_dir, "queries_dev.npy")
         if not dev_path.exists():
             model = create_embedding_model(
                 load_model_config(configs_root, model_spec)["model"]

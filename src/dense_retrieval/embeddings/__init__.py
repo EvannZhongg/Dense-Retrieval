@@ -1,5 +1,5 @@
 from .base import EmbeddingModel, HashEmbeddingModel, create_embedding_model
-from .cache import cached_encode_queries, find_cache_dir
+from .cache import cached_encode_queries, find_cache_dir, find_query_cache_path
 from .registry import MODEL_SPECS
 
 __all__ = [
@@ -9,4 +9,5 @@ __all__ = [
     "cached_encode_queries",
     "create_embedding_model",
     "find_cache_dir",
+    "find_query_cache_path",
 ]

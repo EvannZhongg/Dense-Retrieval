@@ -18,7 +18,11 @@ import yaml
 from ..datasets import load_beir_dataset
 from ..datasets.splits import rows_for_queries, stable_query_split
 from ..embeddings import create_embedding_model
-from ..embeddings.cache import cached_encode_queries, find_cache_dir
+from ..embeddings.cache import (
+    cached_encode_queries,
+    find_cache_dir,
+    find_query_cache_path,
+)
 from ..evaluation.oracle import closest_positive_index
 
 
@@ -178,7 +182,7 @@ def prepare_correction_data(
     if dataset_name == "fiqa":
         train_dataset = load_beir_dataset("fiqa", datasets_root, "train", False)
         holdout_dataset = load_beir_dataset("fiqa", datasets_root, "test", False)
-        train_path = cache_dir / "queries_train.npy"
+        train_path = find_query_cache_path(cache_dir, "queries_train.npy")
         if train_path.exists():
             train_queries = np.load(train_path, mmap_mode="r")
         elif encode_missing_train_queries:

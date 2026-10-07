@@ -8,13 +8,14 @@ interrupted hosted encoding resumes instead of re-spending API calls.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
 
 
 def find_cache_dir(cache_root, dataset: str, model_dir: str) -> Path:
-    """Return the single complete cache directory for one dataset/model pair."""
+    """Return the unique cache, preferring an explicit migration target."""
     root = Path(cache_root) / dataset / model_dir
     candidates = (
         sorted(
@@ -26,11 +27,35 @@ def find_cache_dir(cache_root, dataset: str, model_dir: str) -> Path:
         if root.exists()
         else []
     )
+    if len(candidates) == 1:
+        return candidates[0]
+    migrated = [
+        path for path in candidates if (path / "empty_text_migration.json").exists()
+    ]
+    if len(migrated) == 1:
+        return migrated[0]
     if len(candidates) != 1:
         raise RuntimeError(
             f"Expected exactly one complete cache under {root}, found {len(candidates)}"
         )
     return candidates[0]
+
+
+def find_query_cache_path(cache_dir: Path, filename: str) -> Path:
+    """Resolve a query array, following explicit document-cache provenance."""
+    cache_dir = Path(cache_dir)
+    direct = cache_dir / filename
+    if direct.exists():
+        return direct
+    manifest_path = cache_dir / "empty_text_migration.json"
+    if not manifest_path.exists():
+        return direct
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    source_key = manifest.get("source_cache_key")
+    if not isinstance(source_key, str) or not source_key:
+        raise ValueError(f"Invalid source_cache_key in {manifest_path}")
+    source = cache_dir.parent / source_key / filename
+    return source if source.exists() else direct
 
 
 def cached_encode_queries(model, texts, path: Path):

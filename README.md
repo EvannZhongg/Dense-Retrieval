@@ -183,6 +183,16 @@ headroom in all four held-out corpora, while every learned gate fails to recover
 it. The current evidence therefore locates the bottleneck in transferable
 benefit prediction rather than correction-space capacity.
 
+The coordinate and benefit-gating probes were also repeated unchanged for
+Qwen3, BGE-M3, and E5. Corpus-local geometry improves correction-coordinate
+NMSE over q-only and fixed-reference controls in all 12 additional held-out
+folds (16/16 including text-small), confirming a real cross-model incremental
+direction signal. Learned corpus benefit gates, however, beat the frozen
+baseline on only one of four corpora per model and are effectively tied with
+the control gates on average despite positive oracle-gating headroom. This
+rules out simply increasing correction or gate capacity; future geometry tests
+must add local ranking-boundary information and preserve the same controls.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.
