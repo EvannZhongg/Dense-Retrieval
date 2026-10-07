@@ -133,17 +133,38 @@ Corpus-specific rank Oracle
 `scripts/run_corpus_rank_oracle.py` measures the upper bound available to a
 corpus-aware correction in the fixed global `B128` coordinate system. It
 constructs the same-query variants `D0_original`, `D1_random_external`,
-`D2_hard_external`, and `D3_high_hard_external`, then optimizes
+`D2_query_local_external`, and `D3_high_query_local_external`, then optimizes
 `Normalize(q + mu + B @ a)` against each variant's hard-negative ranking loss.
 It also optimizes one shared `a_q` across all four variants. The output records
 `corpus_oracle`, `q_only_oracle`, and `H_corpus = corpus_oracle - q_only_oracle`
-for every retrieval metric.
+for every retrieval metric. Query-local external documents are selected with an
+equal per-query budget before taking their union, without relevance labels. The
+study also reports external-document Top-10/Top-256 intrusion and the ranking
+loss gap between corpus-specific and shared coordinates; a variant is not
+evidence of corpus-conditioned signal unless it measurably changes the local
+retrieval neighborhood.
 
 Run the full study with:
 `python scripts/run_corpus_rank_oracle.py --models qwen3 bge-m3 e5`
 
 The long-form metrics and pivoted summary are written to
 `results/corpus_rank_oracle/`.
+
+Corpus-local geometry probe
+---------------------------
+
+Before training another corpus-aware correction network, run
+`python scripts/run_local_geometry_probe.py --models text-embedding-3-small-aiberm`.
+For each leave-one-corpus-out fold, this fits document-only spherical prototypes
+independently inside every corpus and aggregates the query's local prototype
+posterior into permutation-invariant direction, variance, score, entropy, and
+mass features. It predicts held-out oracle correction coordinates with three
+matched ridge models: raw `q_only`, `reference_geometry` computed from one fixed
+training-corpus codebook, and `corpus_geometry` computed from the current
+corpus's own prototypes. Only a stable improvement over both controls is
+evidence of corpus-specific incremental information. The held-out corpus qrels
+are used for final target evaluation only, never for prototype fitting, feature
+normalization, predictor fitting, or alpha selection.
 
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 

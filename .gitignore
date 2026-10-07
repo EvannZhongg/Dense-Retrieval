@@ -8,6 +8,7 @@ __pycache__/
 # also match src/dense_retrieval/datasets/, silently dropping source modules.
 /cache/
 /datasets/
+/tmp/
 
 # Fitted correction artifacts (subspace bases, prototype fields, ridge weights)
 # are reproducible from the embedding cache, so only the CSV/PNG/JSON outputs of

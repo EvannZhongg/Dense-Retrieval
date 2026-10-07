@@ -115,7 +115,10 @@ def exact_search(
         # evaluation calls made by lambda selection.
         source = document_embeddings if isinstance(document_embeddings, np.ndarray) else d
         cached = _TORCH_DOCUMENT_CACHE.get(source, d)
-        query = _TORCH.from_numpy(q).cuda(non_blocking=True)
+        upload_queries = q
+        if not q.flags.c_contiguous or not q.flags.writeable:
+            upload_queries = np.ascontiguousarray(q).copy()
+        query = _TORCH.from_numpy(upload_queries).cuda(non_blocking=True)
         with _TORCH.inference_mode():
             scores, indices = _TORCH.topk(query @ cached.T, k=k, dim=1)
         return indices.cpu().numpy(), scores.cpu().numpy()
