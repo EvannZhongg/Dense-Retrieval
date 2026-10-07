@@ -15,7 +15,8 @@ __pycache__/
 /results/**/*.npz
 
 # Subset smoke runs are throwaway verification outputs, not reference results.
-/results/*_smoke/
+# Trailing * so suffixed variants ("..._smoke256") are covered too.
+/results/*_smoke*/
 
 # local scratch probe scripts with machine-specific paths
 scripts/probe_query_calibration.py

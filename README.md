@@ -102,6 +102,24 @@ sketch with occupancy features, and its negatives are generated from that same c
 the same train/dev/test splits, architecture, ranking loss, and macro-dev
 lambda selection.
 
+Corpus-specific rank Oracle
+---------------------------
+
+`scripts/run_corpus_rank_oracle.py` measures the upper bound available to a
+corpus-aware correction in the fixed global `B128` coordinate system. It
+constructs the same-query variants `D0_original`, `D1_random_external`,
+`D2_hard_external`, and `D3_high_hard_external`, then optimizes
+`Normalize(q + mu + B @ a)` against each variant's hard-negative ranking loss.
+It also optimizes one shared `a_q` across all four variants. The output records
+`corpus_oracle`, `q_only_oracle`, and `H_corpus = corpus_oracle - q_only_oracle`
+for every retrieval metric.
+
+Run the full study with:
+`python scripts/run_corpus_rank_oracle.py --models qwen3 bge-m3 e5`
+
+The long-form metrics and pivoted summary are written to
+`results/corpus_rank_oracle/`.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.
