@@ -203,6 +203,19 @@ reliable next baseline is query-only calibration; a new corpus-aware direction
 should first establish a distinct local-boundary upper bound rather than add
 capacity to the current representation.
 
+Conservative query-only step-size selection was tested with
+`python scripts/run_local_geometry_probe.py --lambda-selection robust`. A
+nonzero lambda must preserve dev HitRate@10 on every training corpus and
+strictly improve the training-corpus macro average. It still selects a nonzero
+step in 15/16 folds and produces negative mean held-out NDCG@10 for all four
+embedding models. Requiring a strict gain on every training corpus would
+abstain in 14/16 folds, while both remaining corrections hurt the held-out
+corpus. Cross-corpus dev non-degradation is therefore not a held-out safety
+certificate; current query-only calibration remains unreliable, and the
+strict alternative is mostly frozen-baseline abstention rather than a useful
+calibration method. Full results are in
+`results/robust_query_calibration_loco/findings.md`.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.

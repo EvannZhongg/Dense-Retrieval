@@ -42,6 +42,40 @@ from dense_retrieval.evaluation.ranking import evaluate_retrieval  # noqa: E402
 METHODS = ("q_only", "reference_geometry", "corpus_geometry")
 
 
+def _select_lambda(curve, rule):
+    """Select a step from per-corpus dev metrics, with exact abstention."""
+    if not curve or not any(abs(row["lambda"]) <= 1e-12 for row in curve):
+        raise ValueError("lambda curve must include zero")
+    if rule == "macro":
+        return max(
+            curve,
+            key=lambda row: (
+                row["macro_HitRate@10"],
+                -row["lambda"],
+            ),
+        )["lambda"]
+    if rule != "robust":
+        raise ValueError("lambda selection rule must be macro or robust")
+    baseline = next(row for row in curve if abs(row["lambda"]) <= 1e-12)
+    eligible = [
+        row
+        for row in curve
+        if row["lambda"] > 0
+        and row["min_HitRate@10_gain"] >= -1e-12
+        and row["macro_HitRate@10"] > baseline["macro_HitRate@10"] + 1e-12
+    ]
+    if not eligible:
+        return 0.0
+    return max(
+        eligible,
+        key=lambda row: (
+            row["macro_HitRate@10"],
+            row["macro_NDCG@10"],
+            -row["lambda"],
+        ),
+    )["lambda"]
+
+
 def _balanced_sample_weights(corpus_sizes: list[int]) -> np.ndarray:
     weights = [np.full(size, 1.0 / (len(corpus_sizes) * size)) for size in corpus_sizes]
     return np.concatenate(weights)
@@ -294,9 +328,9 @@ def run(args):
                         best = candidate
                         best_model = model
 
-                lambda_curve = []
+                per_lambda_metrics = []
                 for lambda_ in args.lambdas:
-                    corpus_values = []
+                    corpus_metrics = {}
                     for name in train_names:
                         dev_features = _feature_matrix(
                             loaded[name]["dev_queries"],
@@ -318,22 +352,59 @@ def run(args):
                             loaded[name]["documents"],
                             args.batch_size,
                         )
-                        corpus_values.append(metrics["HitRate@10"])
-                    lambda_curve.append(
-                        (float(lambda_), float(np.mean(corpus_values)))
+                        corpus_metrics[name] = metrics
+                        lambda_selection_rows.append(
+                            {
+                                "model": model_key,
+                                "heldout_corpus": heldout,
+                                "method": method,
+                                "scope": name,
+                                "lambda": float(lambda_),
+                                "dev_HitRate@10": metrics["HitRate@10"],
+                                "dev_NDCG@10": metrics["NDCG@10"],
+                                "min_HitRate@10_gain": np.nan,
+                            }
+                        )
+                    per_lambda_metrics.append(
+                        {
+                            "lambda": float(lambda_),
+                            "metrics": corpus_metrics,
+                            "macro_HitRate@10": float(
+                                np.mean(
+                                    [value["HitRate@10"] for value in corpus_metrics.values()]
+                                )
+                            ),
+                            "macro_NDCG@10": float(
+                                np.mean(
+                                    [value["NDCG@10"] for value in corpus_metrics.values()]
+                                )
+                            ),
+                        }
+                    )
+                zero = next(
+                    row for row in per_lambda_metrics if abs(row["lambda"]) <= 1e-12
+                )
+                for row in per_lambda_metrics:
+                    row["min_HitRate@10_gain"] = min(
+                        row["metrics"][name]["HitRate@10"]
+                        - zero["metrics"][name]["HitRate@10"]
+                        for name in train_names
                     )
                     lambda_selection_rows.append(
                         {
                             "model": model_key,
                             "heldout_corpus": heldout,
                             "method": method,
-                            "lambda": float(lambda_),
-                            "macro_dev_HitRate@10": float(np.mean(corpus_values)),
+                            "scope": "macro",
+                            "lambda": row["lambda"],
+                            "dev_HitRate@10": row["macro_HitRate@10"],
+                            "dev_NDCG@10": row["macro_NDCG@10"],
+                            "min_HitRate@10_gain": row["min_HitRate@10_gain"],
                         }
                     )
-                selected_lambda = max(
-                    lambda_curve, key=lambda value: (value[1], -value[0])
-                )[0]
+                selected_lambda = _select_lambda(
+                    per_lambda_metrics, args.lambda_selection
+                )
 
                 test_features = _feature_matrix(
                     held_data["test_queries"],
@@ -395,6 +466,7 @@ def run(args):
                     "heldout_test_missing_positive": held_missing,
                     "alpha_grid": list(args.alphas),
                     "lambda_grid": list(args.lambdas),
+                    "lambda_selection": args.lambda_selection,
                 }
             )
             print(f"{model_key}/{heldout}: complete", flush=True)
@@ -464,6 +536,9 @@ def build_parser():
     parser.add_argument("--random-state", type=int, default=0)
     parser.add_argument(
         "--lambdas", nargs="+", type=float, default=DEFAULT_LAMBDAS
+    )
+    parser.add_argument(
+        "--lambda-selection", choices=["macro", "robust"], default="macro"
     )
     return parser
 
