@@ -22,13 +22,15 @@ from torch.nn import functional as F
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
 
-from run_correction_ablation import DEFAULT_LAMBDAS, prepare_three_way  # noqa: E402
 from dense_retrieval.analysis.prototype_correction import (  # noqa: E402
     project_correction_targets,
 )
 from dense_retrieval.analysis.shared_anchors import SharedAnchorCodebook  # noqa: E402
+from dense_retrieval.analysis.study_data import (  # noqa: E402
+    DEFAULT_LAMBDAS,
+    prepare_three_way,
+)
 from dense_retrieval.analysis.query_correction import (  # noqa: E402
     build_oracle_deltas,
     fit_pca_subspace,

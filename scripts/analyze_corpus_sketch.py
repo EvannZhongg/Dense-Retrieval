@@ -14,10 +14,12 @@ from sklearn.metrics import r2_score
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
 
-from run_correction_ablation import prepare_three_way  # noqa: E402
 from dense_retrieval.analysis.shared_anchors import SharedAnchorCodebook  # noqa: E402
+from dense_retrieval.analysis.study_data import (  # noqa: E402
+    other_documents,
+    prepare_three_way,
+)
 from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402
 
 
@@ -87,23 +89,6 @@ def prediction_metrics(train_q, train_g, test_q, test_g, train_ids):
 
 def load_corpus_data(dataset_name, model_key, cache_root):
     return prepare_three_way(dataset_name, model_key, cache_root)
-
-
-def other_documents(dataset_name, model_key, cache_root):
-    chunks = []
-    for other_name in ("fiqa", "arguana", "scifact", "nfcorpus"):
-        if other_name == dataset_name:
-            continue
-        spec = MODEL_SPECS[model_key]
-        model_dir = cache_root / other_name / spec["cache_dir"]
-        candidates = sorted(
-            path for path in model_dir.iterdir()
-            if (path / "documents.npy").exists() and (path / "queries.npy").exists()
-        )
-        if len(candidates) != 1:
-            raise RuntimeError(f"Expected one cache for {other_name}/{model_key}, got {candidates}")
-        chunks.append(np.asarray(np.load(candidates[0] / "documents.npy", mmap_mode="r")))
-    return np.concatenate(chunks, axis=0)
 
 
 def fixed_query_variants(

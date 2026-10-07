@@ -4,6 +4,7 @@ pyarrow
 pyyaml
 python-dotenv
 requests
+openai
 scipy>=1.18,<1.19
 matplotlib
 scikit-learn

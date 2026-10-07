@@ -9,6 +9,12 @@ these keys and labels instead of repeating the mapping.
 from __future__ import annotations
 
 MODEL_SPECS = {
+    "text-embedding-3-small-aiberm": {
+        "label": "text-embedding-3-small (Aiberm)",
+        "cache_dir": "openai__text-embedding-3-small",
+        "result_dir": "text-embedding-3-small",
+        "config": "fiqa_text_embedding_3_small_aiberm.yaml",
+    },
     "qwen3": {
         "label": "Qwen3",
         "cache_dir": "Qwen__Qwen3-Embedding-0.6B",

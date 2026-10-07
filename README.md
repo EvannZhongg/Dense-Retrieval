@@ -127,3 +127,26 @@ The long-form metrics and pivoted summary are written to
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.
+
+The embedding stack is split into model adapters and transport providers. The adapter owns model-specific query/document text rules and normalization; the provider owns authentication, batching transport, retries, and response parsing. Aiberm uses the official OpenAI-compatible SDK client with `https://aiberm.com/v1`, while the existing SiliconFlow and OpenRouter providers remain independent.
+
+Run `text-embedding-3-small` through Aiberm on the available test datasets:
+
+```powershell
+cd "F:\Dense Retrieval"
+.\.venv\Scripts\Activate.ps1
+
+python scripts/run_experiment.py --config configs/fiqa_text_embedding_3_small_aiberm.yaml
+python scripts/run_experiment.py --config configs/arguana_text_embedding_3_small_aiberm.yaml
+python scripts/run_experiment.py --config configs/nfcorpus_text_embedding_3_small_aiberm.yaml
+python scripts/run_experiment.py --config configs/scifact_text_embedding_3_small_aiberm.yaml
+
+python scripts/analyze_results.py --results results --output results/summary.json
+python scripts/plot_results.py --results results
+```
+
+Set the project-root `.env` value before running:
+
+```dotenv
+AIBERM_API_KEY=your_aiberm_api_key_here
+```

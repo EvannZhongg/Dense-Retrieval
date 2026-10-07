@@ -22,19 +22,19 @@ from sklearn.neural_network import MLPRegressor
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from run_correction_ablation import (  # noqa: E402
-    DEFAULT_LAMBDAS,
-    corrected_queries,
-    prepare_three_way,
-)
 from dense_retrieval.analysis.prototype_correction import (  # noqa: E402
     project_correction_targets,
+)
+from dense_retrieval.analysis.query_correction import (  # noqa: E402
+    build_oracle_deltas,
+    corrected_queries,
 )
 from dense_retrieval.analysis.shared_anchors import (  # noqa: E402
     SharedAnchorCodebook,
 )
-from dense_retrieval.analysis.query_correction import (  # noqa: E402
-    build_oracle_deltas,
+from dense_retrieval.analysis.study_data import (  # noqa: E402
+    DEFAULT_LAMBDAS,
+    prepare_three_way,
 )
 from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402
 from dense_retrieval.evaluation.ranking import METRICS, evaluate_retrieval  # noqa: E402

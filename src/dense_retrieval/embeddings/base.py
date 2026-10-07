@@ -90,6 +90,7 @@ class HostedEmbeddingAdapter(EmbeddingModel):
         batch_size: int = 32,
         revision: str = "hosted",
         query_instruction: str | None = None,
+        empty_text_placeholder: str = "[EMPTY]",
     ):
         self.model_id = model_id
         self.dimension = int(dimension)
@@ -98,6 +99,7 @@ class HostedEmbeddingAdapter(EmbeddingModel):
         self.batch_size = int(batch_size)
         self.cache_batch_size = self.batch_size
         self.query_instruction = query_instruction
+        self.empty_text_placeholder = empty_text_placeholder
         self.provider_config = dict(provider)
         self.provider = create_provider(provider)
         self.encoding_config = {
@@ -107,6 +109,7 @@ class HostedEmbeddingAdapter(EmbeddingModel):
             },
             "batch_size": self.batch_size,
             "query_instruction": query_instruction,
+            "empty_text_placeholder": empty_text_placeholder,
             "normalization": "l2",
         }
 
@@ -125,6 +128,12 @@ class HostedEmbeddingAdapter(EmbeddingModel):
             return [f"passage: {text}" for text in texts]
         return list(texts)
 
+    def _sanitize_texts(self, texts: Sequence[str]) -> list[str]:
+        return [
+            text if text and text.strip() else self.empty_text_placeholder
+            for text in texts
+        ]
+
     def _encode(self, texts: Sequence[str]) -> np.ndarray:
         vectors = self.provider.embed(self.model_id, texts)
         if vectors.ndim != 2 or vectors.shape != (len(texts), self.dimension):
@@ -134,10 +143,10 @@ class HostedEmbeddingAdapter(EmbeddingModel):
         return self.normalize(vectors)
 
     def encode_queries(self, texts):
-        return self._encode(self._query_texts(texts))
+        return self._encode(self._query_texts(self._sanitize_texts(texts)))
 
     def encode_documents(self, texts):
-        return self._encode(self._document_texts(texts))
+        return self._encode(self._document_texts(self._sanitize_texts(texts)))
 
 def create_embedding_model(config: dict) -> EmbeddingModel:
     adapter = config.get("adapter", "auto")
@@ -158,6 +167,7 @@ def create_embedding_model(config: dict) -> EmbeddingModel:
             batch_size=config.get("batch_size", 32),
             revision=config.get("revision", "hosted"),
             query_instruction=config.get("query_instruction"),
+            empty_text_placeholder=config.get("empty_text_placeholder", "[EMPTY]"),
         )
     cls = {"e5": E5Adapter, "qwen3": Qwen3Adapter, "gte": GTEAdapter, "sentence-transformers": SentenceTransformerAdapter}[adapter]
     if adapter == "qwen3":

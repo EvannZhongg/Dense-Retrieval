@@ -1,0 +1,36 @@
+{
+  "dataset": {
+    "name": "nfcorpus",
+    "root": "datasets",
+    "split": "test",
+    "download": false
+  },
+  "model": {
+    "adapter": "text-embedding-3-small",
+    "model_id": "openai/text-embedding-3-small",
+    "revision": "aiberm-api",
+    "dimension": 1536,
+    "batch_size": 32,
+    "empty_text_placeholder": "[EMPTY]",
+    "provider": {
+      "type": "aiberm",
+      "base_url": "https://aiberm.com/v1",
+      "api_key_env": "AIBERM_API_KEY",
+      "timeout_seconds": 120,
+      "max_retries": 5
+    }
+  },
+  "cache_dir": "cache",
+  "results_dir": "results",
+  "encoding_workers": 8,
+  "search_k": 100,
+  "temperature": 1.0,
+  "oracle_lambdas": [
+    0,
+    0.01,
+    0.02,
+    0.05,
+    0.1,
+    0.2
+  ]
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse, hashlib, json, os, sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ def cache_key(dataset, model):
     payload = {"dataset": dataset, "model_id": model.model_id, "revision": model.revision, "dimension": model.dimension, "encoding_config": model.encoding_config}
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:20]
 
-def cached_encode(model, texts, path, kind):
+def cached_encode(model, texts, path, kind, workers=1):
     path = Path(path)
     if path.exists():
         arr = np.load(path)
@@ -24,27 +25,49 @@ def cached_encode(model, texts, path, kind):
     if batch_size:
         parts_dir = path.parent / f"{path.stem}_parts"
         parts_dir.mkdir(parents=True, exist_ok=True)
-        parts = []
-        for start in range(0, len(texts), batch_size):
+        spans = [
+            (start, min(start + batch_size, len(texts)))
+            for start in range(0, len(texts), batch_size)
+        ]
+        missing = []
+        for start, end in spans:
             end = min(start + batch_size, len(texts))
             part_path = parts_dir / f"{start:09d}_{end:09d}.npy"
             if part_path.exists():
                 part = np.load(part_path)
                 if part.shape != (end - start, model.dimension):
                     part_path.unlink()
-                    part = None
+                    missing.append((start, end, part_path))
             else:
-                part = None
-            if part is None:
-                batch = texts[start:end]
-                part = model.encode_queries(batch) if kind == "query" else model.encode_documents(batch)
-                if part.shape != (end - start, model.dimension):
-                    raise ValueError(
-                        f"{kind} batch shape {part.shape}, expected {(end - start, model.dimension)}"
+                missing.append((start, end, part_path))
+
+        def encode_part(item):
+            start, end, part_path = item
+            batch = texts[start:end]
+            part = model.encode_queries(batch) if kind == "query" else model.encode_documents(batch)
+            if part.shape != (end - start, model.dimension):
+                raise ValueError(
+                    f"{kind} batch shape {part.shape}, expected {(end - start, model.dimension)}"
+                )
+            np.save(part_path, part.astype(np.float32))
+            return end - start
+
+        if missing:
+            completed = len(spans) - len(missing)
+            workers = max(1, int(workers))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [executor.submit(encode_part, item) for item in missing]
+                for future in as_completed(futures):
+                    future.result()
+                    completed += 1
+                    print(
+                        f"{kind}: completed batches {completed}/{len(spans)}",
+                        flush=True,
                     )
-                np.save(part_path, part.astype(np.float32))
-            parts.append(part.astype(np.float32))
-            print(f"{kind}: encoded/cached {end}/{len(texts)}", flush=True)
+        parts = [
+            np.load(parts_dir / f"{start:09d}_{end:09d}.npy").astype(np.float32)
+            for start, end in spans
+        ]
         arr = np.concatenate(parts, axis=0) if parts else np.empty((0, model.dimension), dtype=np.float32)
     else:
         arr = model.encode_queries(texts) if kind == "query" else model.encode_documents(texts)
@@ -62,7 +85,9 @@ def run(config):
     )
     model = create_embedding_model(model_cfg); key = cache_key(dataset.name, model); cache = Path(config.get("cache_dir", "cache")) / dataset.name / model.model_id.replace("/", "__") / key
     query_ids = [q.query_id for q in dataset.queries]; query_texts = [q.query_text for q in dataset.queries]; doc_ids = list(dataset.corpus); doc_texts = [f"{dataset.corpus[d].title}\n{dataset.corpus[d].text}".strip() for d in doc_ids]
-    qemb = cached_encode(model, query_texts, cache / "queries.npy", "query"); demb = cached_encode(model, doc_texts, cache / "documents.npy", "document")
+    workers = int(config.get("encoding_workers", 1))
+    qemb = cached_encode(model, query_texts, cache / "queries.npy", "query", workers)
+    demb = cached_encode(model, doc_texts, cache / "documents.npy", "document", workers)
     metrics, frame = evaluate_embeddings(query_ids, dataset.qrels, qemb, demb, doc_ids, float(config.get("temperature", 1.0)), int(config.get("search_k", 100)))
     oracle = run_oracle_correction(query_ids, dataset.qrels, qemb, demb, doc_ids, config.get("oracle_lambdas", [0, .01, .02, .05, .1, .2]), int(config.get("search_k", 100)))
     out = Path(config.get("results_dir", "results")) / dataset.name / model.model_id.split("/")[-1].lower(); out.mkdir(parents=True, exist_ok=True)

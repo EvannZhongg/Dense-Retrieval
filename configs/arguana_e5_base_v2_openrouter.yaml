@@ -11,6 +11,7 @@ model:
   revision: openrouter-api
   dimension: 768
   batch_size: 32
+  empty_text_placeholder: "[EMPTY]"
   provider:
     type: openrouter
     base_url: https://openrouter.ai/api/v1

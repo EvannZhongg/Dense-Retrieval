@@ -23,13 +23,14 @@ from torch.nn import functional as F
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
 
-from analyze_corpus_sketch import other_documents  # noqa: E402
-from run_correction_ablation import prepare_three_way  # noqa: E402
 from dense_retrieval.analysis.query_correction import (  # noqa: E402
     build_oracle_deltas,
     fit_pca_subspace,
+)
+from dense_retrieval.analysis.study_data import (  # noqa: E402
+    other_documents,
+    prepare_three_way,
 )
 from dense_retrieval.datasets import Document, RetrievalDataset  # noqa: E402
 from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402

@@ -15,6 +15,7 @@ from .query_correction import (
     apply_correction,
     apply_oracle_correction,
     build_oracle_deltas,
+    corrected_queries,
     fit_pca_subspace,
     gain_retention,
     load_model_config,
@@ -34,6 +35,7 @@ from .shared_anchors import (
     query_anchor_features,
     select_top_anchors,
 )
+from .study_data import DEFAULT_LAMBDAS, other_documents, prepare_three_way
 
 __all__ = [
     "summarize_results",
@@ -50,6 +52,7 @@ __all__ = [
     "apply_correction",
     "apply_oracle_correction",
     "build_oracle_deltas",
+    "corrected_queries",
     "fit_pca_subspace",
     "gain_retention",
     "load_model_config",
@@ -66,4 +69,7 @@ __all__ = [
     "select_top_anchors",
     "build_query_anchor_features",
     "query_anchor_features",
+    "DEFAULT_LAMBDAS",
+    "prepare_three_way",
+    "other_documents",
 ]

@@ -102,6 +102,15 @@ def apply_correction(query_embeddings, query_rows, deltas, lambda_):
     return corrected.astype(np.float32)
 
 
+def corrected_queries(queries, deltas, lambda_):
+    """Apply a scaled correction to every query and renormalize rows."""
+    corrected = np.asarray(queries, dtype=np.float64) + float(lambda_) * np.asarray(
+        deltas, dtype=np.float64
+    )
+    corrected /= np.maximum(np.linalg.norm(corrected, axis=1, keepdims=True), 1e-12)
+    return corrected.astype(np.float32)
+
+
 def apply_oracle_correction(query_embeddings, positives, available, lambda_):
     """Interpolate the available queries toward their positive and renormalize."""
     corrected = np.asarray(query_embeddings, dtype=np.float32).copy()

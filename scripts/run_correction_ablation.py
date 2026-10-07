@@ -28,91 +28,19 @@ from dense_retrieval.analysis.prototype_correction import (  # noqa: E402
 )
 from dense_retrieval.analysis.query_correction import (  # noqa: E402
     build_oracle_deltas,
+    corrected_queries,
     fit_pca_subspace,
-    prepare_correction_data,
 )
-from dense_retrieval.datasets import RetrievalDataset, load_beir_dataset  # noqa: E402
-from dense_retrieval.datasets.splits import rows_for_queries  # noqa: E402
+from dense_retrieval.analysis.study_data import (  # noqa: E402
+    DEFAULT_LAMBDAS,
+    prepare_three_way,
+)
 from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402
 from dense_retrieval.evaluation.ranking import METRICS, evaluate_retrieval  # noqa: E402
 
 
 METHODS = ["baseline", "mean_correction", "linear_q_only", "mlp_q_only", "prototype_field"]
-DEFAULT_LAMBDAS = [0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
 RIDGE_ALPHAS = [1e-3, 1e-2, 1e-1, 1.0, 10.0, 100.0]
-
-
-def _subset_dataset(dataset, name: str, query_ids: set[str]) -> RetrievalDataset:
-    queries = [sample for sample in dataset.queries if sample.query_id in query_ids]
-    qrels = {sample.query_id: dataset.qrels[sample.query_id] for sample in queries}
-    return RetrievalDataset(name, queries, dataset.corpus, qrels)
-
-
-def _split_holdout(dataset, salt: str):
-    ordered = sorted(
-        dataset.queries,
-        key=lambda sample: hashlib.sha256(f"{salt}:{sample.query_id}".encode()).digest(),
-    )
-    middle = len(ordered) // 2
-    dev_ids = {sample.query_id for sample in ordered[:middle]}
-    test_ids = {sample.query_id for sample in ordered[middle:]}
-    return (
-        _subset_dataset(dataset, f"{dataset.name}_dev", dev_ids),
-        _subset_dataset(dataset, f"{dataset.name}_test", test_ids),
-    )
-
-
-def prepare_three_way(dataset_name: str, model_key: str, cache_root: Path):
-    """Return the common train/dev/test split and cached query embeddings."""
-    model_spec = MODEL_SPECS[model_key]
-    train_dataset, holdout_dataset, train_queries, holdout_queries, documents, cache_dir, split = (
-        prepare_correction_data(
-            dataset_name,
-            model_spec,
-            cache_root=cache_root,
-            datasets_root=ROOT / "datasets",
-            configs_root=ROOT / "configs",
-            split_salt=("arguana-low-rank-v1" if dataset_name == "arguana" else f"ablation-{dataset_name}-v1"),
-            missing_relevant_policy="keep" if dataset_name == "arguana" else "error",
-        )
-    )
-    if dataset_name == "fiqa":
-        dev_dataset = load_beir_dataset("fiqa", ROOT / "datasets", "dev", False)
-        dev_queries = np.load(cache_dir / "queries_dev.npy", mmap_mode="r")
-        test_dataset = holdout_dataset
-        test_queries = holdout_queries
-        split = "official FiQA train/dev/test qrels"
-    else:
-        dev_dataset, test_dataset = _split_holdout(
-            holdout_dataset,
-            "arguana-predictability-v1"
-            if dataset_name == "arguana"
-            else f"ablation-{dataset_name}-dev-test-v1",
-        )
-        full_dataset = load_beir_dataset(
-            dataset_name,
-            ROOT / "datasets",
-            "test",
-            False,
-            "keep" if dataset_name == "arguana" else "error",
-        )
-        full_queries = np.load(cache_dir / "queries.npy", mmap_mode="r")
-        dev_queries = full_queries[rows_for_queries(full_dataset, dev_dataset)]
-        test_queries = full_queries[rows_for_queries(full_dataset, test_dataset)]
-        split = f"{split}; deterministic dev/test split of holdout"
-    if len(dev_queries) != len(dev_dataset.queries) or len(test_queries) != len(test_dataset.queries):
-        raise ValueError(f"{dataset_name}/{model_key}: query/cache count mismatch")
-    return (
-        train_dataset,
-        dev_dataset,
-        test_dataset,
-        np.asarray(train_queries),
-        np.asarray(dev_queries),
-        np.asarray(test_queries),
-        documents,
-        cache_dir,
-        split,
-    )
 
 
 def stable_train_validation_split(query_ids, validation_fraction: float = 0.2):
@@ -155,12 +83,6 @@ def fit_mlp_q_only(x, targets, random_state: int = 0):
     )
     model.fit(x, targets)
     return model
-
-
-def corrected_queries(queries, deltas, lambda_):
-    corrected = np.asarray(queries, dtype=np.float64) + float(lambda_) * np.asarray(deltas, dtype=np.float64)
-    corrected /= np.maximum(np.linalg.norm(corrected, axis=1, keepdims=True), 1e-12)
-    return corrected.astype(np.float32)
 
 
 def select_lambda(dev_dataset, dev_queries, documents, predicted_deltas, lambdas, batch_size):
@@ -311,4 +233,3 @@ def build_parser():
 if __name__ == "__main__":
     load_dotenv(ROOT / ".env")
     run(build_parser().parse_args())
-

@@ -11,6 +11,7 @@
     "revision": "siliconflow-api",
     "dimension": 1024,
     "batch_size": 32,
+    "empty_text_placeholder": "[EMPTY]",
     "provider": {
       "type": "siliconflow",
       "base_url": "https://api.siliconflow.cn/v1",
