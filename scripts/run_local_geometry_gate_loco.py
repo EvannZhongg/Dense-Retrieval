@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from dense_retrieval.analysis.local_geometry import (  # noqa: E402
     CorpusPrototypeGeometry,
     fit_reference_geometry,
+    projected_cell_moments,
     query_correction_features,
 )
 from dense_retrieval.analysis.query_correction import (  # noqa: E402
@@ -115,7 +116,16 @@ def _per_query_ndcg(dataset, queries, documents, batch_size):
     return frame["ndcg_at_10"].to_numpy(dtype=np.float32)
 
 
-def _gate_features(queries, method, local, reference, components, args):
+def _gate_features(
+    queries,
+    method,
+    local,
+    reference,
+    components,
+    args,
+    local_moments=None,
+    reference_moments=None,
+):
     return query_correction_features(
         queries,
         method,
@@ -124,6 +134,8 @@ def _gate_features(queries, method, local, reference, components, args):
         components,
         top_m=args.top_m,
         temperature=args.geometry_temperature,
+        local_cell_moments=local_moments,
+        reference_cell_moments=reference_moments,
     )
 
 
@@ -198,6 +210,29 @@ def run(args):
                 random_state=args.random_state + 1009 * (fold_index + 1),
                 assignment_batch_size=args.assignment_batch_size,
             )
+            if args.include_cell_moments:
+                local_moments = {
+                    name: projected_cell_moments(
+                        loaded[name]["documents"],
+                        local_geometries[name],
+                        components,
+                        max_documents=args.max_moment_documents,
+                        batch_size=args.assignment_batch_size,
+                        random_state=args.random_state + 7919 * (fold_index + 1),
+                    )
+                    for name in args.datasets
+                }
+                reference_moments = projected_cell_moments(
+                    {name: loaded[name]["documents"] for name in train_names},
+                    reference,
+                    components,
+                    max_documents=args.max_moment_documents,
+                    batch_size=args.assignment_batch_size,
+                    random_state=args.random_state + 104729 * (fold_index + 1),
+                )
+            else:
+                local_moments = {name: None for name in args.datasets}
+                reference_moments = None
 
             candidate_train_x = []
             candidate_train_y = []
@@ -368,6 +403,8 @@ def run(args):
                         reference,
                         components,
                         args,
+                        local_moments[name],
+                        reference_moments,
                     )
                     for name in train_names
                 }
@@ -403,6 +440,8 @@ def run(args):
                                 reference,
                                 components,
                                 args,
+                                local_moments[name],
+                                reference_moments,
                             )
                             prediction = model.predict(
                                 _normalize(raw_dev, center, scale)
@@ -439,6 +478,8 @@ def run(args):
                     reference,
                     components,
                     args,
+                    local_moments[heldout],
+                    reference_moments,
                 )
                 held_prediction = best_model.predict(
                     _normalize(held_raw, center, scale)
@@ -493,6 +534,8 @@ def run(args):
                     "gate_target": "per_query_corrected_minus_baseline_NDCG@10",
                     "gate_model": "ridge_utility_regression",
                     "gate_alphas": list(args.gate_alphas),
+                    "include_cell_moments": args.include_cell_moments,
+                    "max_moment_documents": args.max_moment_documents,
                     "prototype_fit_is_document_only": True,
                     "heldout_qrels_used_for_training_or_selection": False,
                     "heldout_oracle_gate_is_diagnostic_only": True,
@@ -540,6 +583,8 @@ def build_parser():
     parser.add_argument("--max-fit-documents", type=int, default=5000)
     parser.add_argument("--prototype-max-iter", type=int, default=10)
     parser.add_argument("--assignment-batch-size", type=int, default=4096)
+    parser.add_argument("--include-cell-moments", action="store_true")
+    parser.add_argument("--max-moment-documents", type=int, default=5000)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lambdas", nargs="+", type=float, default=DEFAULT_LAMBDAS)
     parser.add_argument("--random-state", type=int, default=0)

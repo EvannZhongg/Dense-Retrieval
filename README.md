@@ -193,6 +193,16 @@ the control gates on average despite positive oracle-gating headroom. This
 rules out simply increasing correction or gate capacity; future geometry tests
 must add local ranking-boundary information and preserve the same controls.
 
+A final local-shape ablation adds per-prototype residual means and diagonal
+variances in the correction basis via
+`python scripts/run_local_geometry_gate_loco.py --include-cell-moments`. On
+text-small it is below the frozen baseline in all four held-out corpora and
+never improves over the plain corpus gate. Together, the experiments do not
+justify further expansion of the prototype/occupancy feature family. The
+reliable next baseline is query-only calibration; a new corpus-aware direction
+should first establish a distinct local-boundary upper bound rather than add
+capacity to the current representation.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.

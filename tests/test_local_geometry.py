@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 from dense_retrieval.analysis.local_geometry import (
     CorpusPrototypeGeometry,
     fit_reference_geometry,
+    projected_cell_moments,
     prototype_counts,
     query_correction_features,
     query_local_geometry_features,
@@ -93,3 +94,30 @@ def test_reference_geometry_and_feature_controls_are_well_formed():
     assert q_only.shape == (1, 2)
     assert corpus.shape == (1, 12)
     assert np.isclose(reference.occupancy.sum(), 1.0)
+
+
+def test_projected_cell_moments_extend_local_features():
+    documents = np.asarray(
+        [[1.0, 0.0], [0.9, 0.1], [0.0, 1.0], [0.1, 0.9]], dtype=float
+    )
+    geometry = CorpusPrototypeGeometry(np.eye(2), [2, 2])
+    moments = projected_cell_moments(
+        documents,
+        geometry,
+        np.eye(2),
+        max_documents=4,
+        batch_size=2,
+        random_state=0,
+    )
+    features = query_local_geometry_features(
+        np.asarray([[1.0, 0.0]]),
+        geometry,
+        np.eye(2),
+        top_m=2,
+        cell_moments=moments,
+    )
+
+    assert moments.mean.shape == (2, 2)
+    assert moments.variance.shape == (2, 2)
+    assert np.all(moments.variance >= 0)
+    assert features.shape == (1, 14)

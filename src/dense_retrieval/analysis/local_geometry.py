@@ -99,6 +99,78 @@ class CorpusPrototypeGeometry:
         return cls(centers, counts)
 
 
+@dataclass(frozen=True)
+class ProjectedCellMoments:
+    """Per-prototype residual mean and diagonal variance in one projection."""
+
+    mean: np.ndarray
+    variance: np.ndarray
+
+    def __post_init__(self) -> None:
+        mean = np.asarray(self.mean, dtype=np.float64)
+        variance = np.asarray(self.variance, dtype=np.float64)
+        if mean.ndim != 2 or variance.shape != mean.shape:
+            raise ValueError("mean and variance must have equal two-dimensional shape")
+        if not np.all(np.isfinite(mean)) or not np.all(np.isfinite(variance)):
+            raise ValueError("cell moments must be finite")
+        if np.any(variance < 0):
+            raise ValueError("cell variance must be non-negative")
+        object.__setattr__(self, "mean", mean)
+        object.__setattr__(self, "variance", variance)
+
+
+def projected_cell_moments(
+    document_embeddings: np.ndarray | Mapping[str, np.ndarray],
+    geometry: CorpusPrototypeGeometry,
+    projection: np.ndarray,
+    *,
+    max_documents: int = 5000,
+    batch_size: int = 1024,
+    random_state: int = 0,
+) -> ProjectedCellMoments:
+    """Estimate within-cell residual moments from a document-only sample."""
+    basis = np.asarray(projection, dtype=np.float64)
+    if basis.ndim != 2 or basis.shape[1] != geometry.prototypes.shape[1]:
+        raise ValueError("projection must have shape (rank, embedding_dimension)")
+    if max_documents <= 0 or batch_size <= 0:
+        raise ValueError("max_documents and batch_size must be positive")
+    if isinstance(document_embeddings, Mapping):
+        if not document_embeddings:
+            raise ValueError("document_embeddings must not be empty")
+        sources = [document_embeddings[name] for name in sorted(document_embeddings)]
+    else:
+        sources = [document_embeddings]
+    rng = np.random.default_rng(random_state)
+    per_source = max(1, int(max_documents) // len(sources))
+    sampled = []
+    for source in sources:
+        values = np.asarray(source)
+        if values.ndim != 2 or values.shape[1] != basis.shape[1] or not len(values):
+            raise ValueError("document embeddings have invalid shape")
+        size = min(per_source, len(values))
+        rows = np.sort(rng.choice(len(values), size=size, replace=False))
+        sampled.append(values[rows])
+
+    count = np.zeros(len(geometry.prototypes), dtype=np.int64)
+    total = np.zeros((len(geometry.prototypes), len(basis)), dtype=np.float64)
+    total_square = np.zeros_like(total)
+    centers = geometry.prototypes
+    projected_centers = centers @ basis.T
+    for values in sampled:
+        for start in range(0, len(values), int(batch_size)):
+            batch = np.asarray(values[start : start + batch_size], dtype=np.float64)
+            batch /= np.maximum(np.linalg.norm(batch, axis=1, keepdims=True), _EPS)
+            labels = np.argmax(batch @ centers.T, axis=1)
+            residual = batch @ basis.T - projected_centers[labels]
+            count += np.bincount(labels, minlength=len(centers))
+            np.add.at(total, labels, residual)
+            np.add.at(total_square, labels, residual**2)
+    denominator = np.maximum(count[:, None], 1)
+    mean = total / denominator
+    variance = np.maximum(total_square / denominator - mean**2, 0.0)
+    return ProjectedCellMoments(mean, variance)
+
+
 def query_local_geometry_features(
     query_embeddings: np.ndarray,
     geometry: CorpusPrototypeGeometry,
@@ -106,6 +178,7 @@ def query_local_geometry_features(
     *,
     top_m: int = 8,
     temperature: float = 0.07,
+    cell_moments: ProjectedCellMoments | None = None,
 ) -> np.ndarray:
     """Aggregate local direction, variance, and density into invariant features.
 
@@ -162,7 +235,25 @@ def query_local_geometry_features(
             np.sum(selected_occupancy, axis=1),
         ]
     )
-    return np.concatenate([mean, variance, scalars], axis=1).astype(np.float32)
+    parts = [mean, variance, scalars]
+    if cell_moments is not None:
+        if cell_moments.mean.shape != (len(centers), basis.shape[0]):
+            raise ValueError(
+                "cell moments must have shape (number_of_prototypes, projection_rank)"
+            )
+        selected_mean = cell_moments.mean[order]
+        selected_variance = cell_moments.variance[order]
+        parts.extend(
+            [
+                np.sum(weights[..., None] * selected_mean, axis=1),
+                np.sum(
+                    weights[..., None]
+                    * np.sqrt(np.maximum(selected_variance, 0.0)),
+                    axis=1,
+                ),
+            ]
+        )
+    return np.concatenate(parts, axis=1).astype(np.float32)
 
 
 def fit_reference_geometry(
@@ -215,6 +306,8 @@ def query_correction_features(
     *,
     top_m: int,
     temperature: float,
+    local_cell_moments: ProjectedCellMoments | None = None,
+    reference_cell_moments: ProjectedCellMoments | None = None,
 ) -> np.ndarray:
     """Build matched q-only, reference, or corpus-local correction features."""
     queries = np.asarray(query_embeddings, dtype=np.float32)
@@ -222,8 +315,10 @@ def query_correction_features(
         return queries
     if method == "reference_geometry":
         geometry = reference_geometry
+        cell_moments = reference_cell_moments
     elif method == "corpus_geometry":
         geometry = local_geometry
+        cell_moments = local_cell_moments
     else:
         raise ValueError(f"unknown feature method: {method}")
     local = query_local_geometry_features(
@@ -232,13 +327,16 @@ def query_correction_features(
         projection,
         top_m=min(top_m, len(geometry.prototypes)),
         temperature=temperature,
+        cell_moments=cell_moments,
     )
     return np.concatenate([queries, local], axis=1)
 
 
 __all__ = [
     "CorpusPrototypeGeometry",
+    "ProjectedCellMoments",
     "prototype_counts",
+    "projected_cell_moments",
     "query_local_geometry_features",
     "fit_reference_geometry",
     "query_correction_features",
