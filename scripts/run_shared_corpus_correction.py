@@ -28,6 +28,7 @@ from dense_retrieval.analysis.prototype_correction import (  # noqa: E402
 from dense_retrieval.analysis.query_correction import (  # noqa: E402
     build_oracle_deltas,
     corrected_queries,
+    fit_zero_origin_pca_subspace,
 )
 from dense_retrieval.analysis.shared_anchors import (  # noqa: E402
     SharedAnchorCodebook,
@@ -73,6 +74,20 @@ def model_input(queries, sketches, include_sketch: bool):
     queries = np.asarray(queries, dtype=np.float32)
     second = np.asarray(sketches, dtype=np.float32) if include_sketch else np.zeros_like(queries)
     return np.concatenate([queries, second], axis=1)
+
+
+def fit_feature_normalizer(values):
+    """Fit robust per-feature scaling on training sketches only."""
+    values = np.asarray(values, dtype=np.float64)
+    center = np.median(values, axis=0)
+    spread = np.median(np.abs(values - center), axis=0) * 1.4826
+    spread = np.where(spread > 1e-6, spread, 1.0)
+    return center.astype(np.float32), spread.astype(np.float32)
+
+
+def normalize_features(values, center, spread):
+    values = np.asarray(values, dtype=np.float32)
+    return np.clip((values - center) / spread, -8.0, 8.0).astype(np.float32)
 
 
 def balanced_sample_weights(corpus_names):
@@ -288,12 +303,19 @@ def run(args: argparse.Namespace):
 
         pooled_deltas = np.concatenate(all_deltas)
         sample_weights = balanced_sample_weights(all_corpus_names)
-        mean, components = fit_weighted_pca_subspace(
-            pooled_deltas, sample_weights, args.rank
+        mean, components = fit_zero_origin_pca_subspace(
+            pooled_deltas, args.rank, sample_weights=sample_weights
         )
         targets = project_correction_targets(pooled_deltas, mean, components)
         train_queries = np.concatenate(all_train_queries).astype(np.float32)
         train_sketches = np.concatenate(all_train_sketches).astype(np.float32)
+        sketch_center, sketch_scale = fit_feature_normalizer(train_sketches)
+        for dataset_name in corpora:
+            corpora[dataset_name]["sketches"] = {
+                split: normalize_features(values, sketch_center, sketch_scale)
+                for split, values in corpora[dataset_name]["sketches"].items()
+            }
+        train_sketches = normalize_features(train_sketches, sketch_center, sketch_scale)
         q_only_input = model_input(train_queries, train_sketches, False)
         sketch_input = model_input(train_queries, train_sketches, True)
 
@@ -386,6 +408,8 @@ def run(args: argparse.Namespace):
                 "shared_predictors_per_embedding_model": 1,
                 "pooled_train_queries": int(sum(len(data["train_queries"]) for data in corpora.values())),
                 "corpus_balanced_loss": True,
+                "zero_origin_correction_subspace": True,
+                "sketch_normalization": "training_median_mad_clip8",
                 "rank": args.rank,
                 "n_anchors_global": args.n_anchors,
                 "top_m": args.top_m,

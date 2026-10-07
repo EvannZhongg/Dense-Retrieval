@@ -13,8 +13,9 @@ import numpy as np
 
 from ..datasets import RetrievalDataset, load_beir_dataset
 from ..datasets.splits import rows_for_queries
-from ..embeddings import MODEL_SPECS
-from .query_correction import prepare_correction_data
+from ..embeddings import MODEL_SPECS, create_embedding_model
+from ..embeddings.cache import cached_encode_queries
+from .query_correction import load_model_config, prepare_correction_data
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -76,7 +77,13 @@ def prepare_three_way(
     )
     if dataset_name == "fiqa":
         dev_dataset = load_beir_dataset("fiqa", datasets_root, "dev", False)
-        dev_queries = np.load(cache_dir / "queries_dev.npy", mmap_mode="r")
+        dev_path = cache_dir / "queries_dev.npy"
+        if not dev_path.exists():
+            model = create_embedding_model(
+                load_model_config(configs_root, model_spec)["model"]
+            )
+            cached_encode_queries(model, dev_dataset.query_texts, dev_path)
+        dev_queries = np.load(dev_path, mmap_mode="r")
         test_dataset = holdout_dataset
         test_queries = holdout_queries
         split = "official FiQA train/dev/test qrels"

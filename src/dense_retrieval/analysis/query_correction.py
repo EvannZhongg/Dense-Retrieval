@@ -87,6 +87,28 @@ def fit_pca_subspace(train_deltas, max_rank):
     return mean, components[:max_rank]
 
 
+def fit_zero_origin_pca_subspace(train_deltas, max_rank, sample_weights=None):
+    """Fit a low-rank subspace whose zero coordinate is exactly zero correction.
+
+    The usual centered PCA stores a non-zero mean correction.  That is useful for
+    reconstruction, but it prevents a predictor from opting out for an individual
+    query.  This variant fits the basis through the origin; a zero coordinate
+    vector therefore reconstructs to an exact zero delta.
+    """
+    deltas = np.asarray(train_deltas, dtype=np.float64)
+    if deltas.ndim != 2 or len(deltas) == 0:
+        raise ValueError("train_deltas must be a non-empty 2-D array")
+    if sample_weights is None:
+        weighted = deltas
+    else:
+        weights = np.asarray(sample_weights, dtype=np.float64)
+        if weights.shape != (len(deltas),) or np.any(weights < 0) or not np.any(weights > 0):
+            raise ValueError("sample_weights must be a non-negative vector")
+        weighted = deltas * np.sqrt(weights[:, None])
+    _, _, components = np.linalg.svd(weighted, full_matrices=False)
+    return np.zeros(deltas.shape[1], dtype=np.float64), components[:max_rank]
+
+
 def project_deltas(deltas, mean, components, rank):
     """Project deltas onto the leading ``rank`` basis vectors, with the mean."""
     basis = components[:rank]

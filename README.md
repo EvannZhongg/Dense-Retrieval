@@ -91,6 +91,19 @@ full-dimensional delta before applying it to a normalized query.
 Ranking-supervised corpus conditioning
 ---------------------------------------
 
+The ranking trainer and exact retriever use CUDA automatically when the
+installed PyTorch build exposes it.  Override with `--device cpu|cuda|auto`;
+`auto` is the default.  On a CUDA-capable Windows machine, install a CUDA
+wheel in the project environment before running the study, for example:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps `
+  torch==2.11.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+```
+
+The experiment metadata records the resolved device.  If `torch.cuda.is_available()`
+is false, training and retrieval fall back to CPU without changing the index.
+
 The regression target `d_positive - q` is corpus-independent, so it cannot
 learn that a query may need a different movement when a corpus contains extra
 hard negatives. `scripts/run_rank_conditioned_correction.py` addresses this by
@@ -105,6 +118,14 @@ lambda selection. The ranking path now preserves flattened per-anchor
 of pooling the anchors into a query-only vector. Its ranking loss uses
 temperature `0.05`, and training samples correction magnitudes from the same
 lambda set used during dev selection.
+
+The corrected trainer refreshes hard negatives after every epoch, balances
+optimizer updates across corpora, scales sketch columns from training data only,
+and fits a zero-origin correction basis so a query can emit an exact zero delta.
+To measure transfer rather than in-corpus sharing, run
+`python scripts/run_leave_one_corpus_out.py --models text-embedding-3-small-aiberm`.
+Each held-out corpus is excluded from anchor fitting, predictor training, and
+lambda selection.
 
 Corpus-specific rank Oracle
 ---------------------------

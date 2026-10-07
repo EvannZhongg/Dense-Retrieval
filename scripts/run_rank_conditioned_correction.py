@@ -33,7 +33,7 @@ from dense_retrieval.analysis.study_data import (  # noqa: E402
 )
 from dense_retrieval.analysis.query_correction import (  # noqa: E402
     build_oracle_deltas,
-    fit_pca_subspace,
+    fit_zero_origin_pca_subspace,
 )
 from dense_retrieval.embeddings import MODEL_SPECS  # noqa: E402
 from dense_retrieval.evaluation.ranking import evaluate_retrieval  # noqa: E402
@@ -65,6 +65,21 @@ def corpus_sketch(queries, codebook, occupancy):
     """
     features = codebook.query_features(queries, occupancy)
     return features.values.reshape(len(features.values), -1).astype(np.float32)
+
+
+def fit_feature_normalizer(values):
+    """Fit per-column robust scaling using training sketches only."""
+    values = np.asarray(values, dtype=np.float64)
+    center = np.median(values, axis=0)
+    scale = np.median(np.abs(values - center), axis=0) * 1.4826
+    scale = np.where(scale > 1e-6, scale, 1.0)
+    return center.astype(np.float32), scale.astype(np.float32)
+
+
+def normalize_features(values, center, scale):
+    return np.clip(
+        (np.asarray(values, dtype=np.float32) - center) / scale, -8.0, 8.0
+    ).astype(np.float32)
 
 
 def build_rank_records(dataset, query_embeddings, documents, hard_k):
@@ -119,42 +134,76 @@ def train_rank_model(
     learning_rate,
     weight_decay,
     random_state,
+    hard_negatives,
+    device="auto",
 ):
     torch.manual_seed(random_state)
+    device = torch.device(
+        "cuda" if device == "auto" and torch.cuda.is_available() else device
+        if device != "auto" else "cpu"
+    )
     dimension = next(iter(corpora.values()))["train_queries"].shape[1]
     rank = components.shape[0]
     sketch_dimension = next(iter(corpora.values()))["train_sketches"].shape[1]
-    model = CorrectionMLP(dimension + sketch_dimension, rank)
+    model = CorrectionMLP(dimension + sketch_dimension, rank).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-    mean_tensor = torch.from_numpy(mean.astype(np.float32))
-    components_tensor = torch.from_numpy(components.astype(np.float32))
+    mean_tensor = torch.from_numpy(mean.astype(np.float32)).to(device)
+    components_tensor = torch.from_numpy(components.astype(np.float32)).to(device)
     losses = []
+    corpus_items = list(corpora.items())
     for epoch in range(epochs):
         epoch_losses = []
-        for corpus_index, data in enumerate(corpora.values()):
+        # Refresh the competition set with the current model.  This prevents the
+        # predictor from only learning to avoid a stale first-pass top-k list.
+        for corpus_index, (name, data) in enumerate(corpus_items):
+            q = data["train_queries"]
+            sketch = data["train_sketches"]
+            features = np.concatenate(
+                [q, sketch if use_sketch else np.zeros_like(sketch)], axis=1
+            )
+            with torch.no_grad():
+                coordinates = model(torch.from_numpy(features.astype(np.float32)).to(device))
+                deltas = mean_tensor + coordinates @ components_tensor
+            probe = _apply(q, deltas.cpu().numpy(), max(train_lambdas))
+            data["rank_records"] = build_rank_records(
+                data["train_dataset"], probe, data["documents"], hard_negatives
+            )
+
+        # Round-robin batches give each corpus the same number of optimizer
+        # updates per epoch; smaller corpora are cycled with replacement.
+        batch_orders = []
+        max_batches = 0
+        for corpus_index, (_, data) in enumerate(corpus_items):
             rng = np.random.default_rng(random_state + epoch * 1009 + corpus_index)
             records = data["rank_records"]
-            # rank_records rows are a subset of train_queries; use their query rows.
             order = rng.permutation(len(records["query_rows"]))
-            for start in range(0, len(order), batch_size):
-                selected = order[start : start + batch_size]
+            batch_orders.append(order)
+            max_batches = max(max_batches, int(np.ceil(len(order) / batch_size)))
+        for batch_id in range(max_batches):
+            for corpus_index, (_, data) in enumerate(corpus_items):
+                records = data["rank_records"]
+                order = batch_orders[corpus_index]
+                if len(order) == 0:
+                    continue
+                positions = (np.arange(batch_size) + batch_id * batch_size) % len(order)
+                selected = order[positions]
                 q = data["train_queries"][records["query_rows"][selected]]
                 sketch = data["train_sketches"][records["query_rows"][selected]]
                 features = np.concatenate(
                     [q, sketch if use_sketch else np.zeros_like(sketch)], axis=1
                 )
-                q_tensor = torch.from_numpy(q.astype(np.float32))
-                features_tensor = torch.from_numpy(features.astype(np.float32))
+                q_tensor = torch.from_numpy(q.astype(np.float32)).to(device)
+                features_tensor = torch.from_numpy(features.astype(np.float32)).to(device)
                 positive_indices = records["positive_indices"][selected]
                 negative_indices = records["negative_indices"][selected]
                 positive_docs = torch.from_numpy(
                     data["documents"][positive_indices].astype(np.float32)
-                )
+                ).to(device)
                 negative_docs = torch.from_numpy(
                     data["documents"][negative_indices].astype(np.float32)
-                )
+                ).to(device)
                 coordinates = model(features_tensor)
                 deltas = mean_tensor + coordinates @ components_tensor
                 lambda_ = float(rng.choice(train_lambdas))
@@ -165,8 +214,8 @@ def train_rank_model(
                 loss = multi_positive_hard_negative_loss(
                     positive_scores,
                     negative_scores,
-                    torch.from_numpy(positive_indices >= 0),
-                    torch.from_numpy(negative_indices >= 0),
+                    torch.from_numpy(positive_indices >= 0).to(device),
+                    torch.from_numpy(negative_indices >= 0).to(device),
                     temperature=temperature,
                 )
                 optimizer.zero_grad()
@@ -203,8 +252,9 @@ def predict_model(model, queries, sketches, mean, components, use_sketch):
     features = np.concatenate(
         [queries, sketches if use_sketch else np.zeros_like(sketches)], axis=1
     )
+    device = next(model.parameters()).device
     with torch.no_grad():
-        coordinates = model(torch.from_numpy(features.astype(np.float32))).numpy()
+        coordinates = model(torch.from_numpy(features.astype(np.float32)).to(device)).cpu().numpy()
     return mean + coordinates @ components
 
 
@@ -308,7 +358,9 @@ def run(args):
                 "train_missing": train_missing,
             }
             pooled_deltas.append(train_deltas)
-        mean, components = fit_pca_subspace(np.concatenate(pooled_deltas), args.rank)
+        mean, components = fit_zero_origin_pca_subspace(
+            np.concatenate(pooled_deltas), args.rank
+        )
         # Build query-relative per-anchor features in the shared B128 basis.
         projected_codebook = SharedAnchorCodebook(
             codebook.anchors, top_m=args.top_m, projection=components
@@ -330,6 +382,16 @@ def run(args):
             }
             corpora[dataset_name]["sketches"] = sketches
             corpora[dataset_name]["train_sketches"] = sketches["train"]
+        all_sketches = np.concatenate(
+            [corpora[name]["train_sketches"] for name in args.datasets]
+        )
+        sketch_center, sketch_scale = fit_feature_normalizer(all_sketches)
+        for dataset_name in args.datasets:
+            corpora[dataset_name]["sketches"] = {
+                split: normalize_features(values, sketch_center, sketch_scale)
+                for split, values in corpora[dataset_name]["sketches"].items()
+            }
+            corpora[dataset_name]["train_sketches"] = corpora[dataset_name]["sketches"]["train"]
         models = {}
         loss_history = {}
         for method, use_sketch in (("rank_q_only", False), ("rank_corpus_sketch", True)):
@@ -345,6 +407,8 @@ def run(args):
                 learning_rate=args.learning_rate,
                 weight_decay=args.weight_decay,
                 random_state=args.random_state,
+                hard_negatives=args.hard_negatives,
+                device=args.device,
             )
             models[method] = (model, use_sketch)
             loss_history[method] = losses
@@ -396,11 +460,16 @@ def run(args):
                 "datasets": list(args.datasets),
                 "shared_coordinate_system": True,
                 "pooled_global_mu_B_fit_once": True,
+                "zero_origin_correction_subspace": True,
                 "rank": args.rank,
                 "n_anchors_global": args.n_anchors,
                 "top_m": args.top_m,
                 "per_anchor_features": ["B.T(anchor-query)", "query-anchor-similarity", "log_occupancy"],
                 "per_anchor_feature_width": int(args.rank + 2),
+                "sketch_normalization": "training_median_mad_clip8",
+                "dynamic_hard_negative_refresh": "every_epoch_after_current_model",
+                "corpus_balanced_optimizer_schedule": "round_robin_equal_updates_with_replacement",
+                "device": str(next(iter(models.values()))[0].parameters().__next__().device),
                 "anchor_codebook_fitted_once_per_embedding_model": True,
                 "anchor_codebook": str(codebook_path.relative_to(args.output_dir)),
                 "hard_negatives_per_query": args.hard_negatives,
@@ -451,6 +520,7 @@ def build_parser():
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--random-state", type=int, default=0)
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--lambdas", nargs="+", type=float, default=DEFAULT_LAMBDAS)
     return parser
 
