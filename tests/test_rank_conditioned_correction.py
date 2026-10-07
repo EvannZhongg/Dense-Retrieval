@@ -4,6 +4,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from dense_retrieval.analysis.shared_anchors import SharedAnchorCodebook
+
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "run_rank_conditioned_correction.py"
 SPEC = importlib.util.spec_from_file_location("rank_conditioned_correction", SCRIPT)
@@ -48,3 +50,17 @@ def test_rank_records_exclude_positives_from_current_corpus_negatives():
     assert 0 not in records["negative_indices"][0]
     assert records["negative_indices"].shape == (1, 2)
 
+
+def test_corpus_sketch_preserves_per_anchor_occupancy_features():
+    rng = np.random.default_rng(4)
+    documents = {"a": rng.normal(size=(20, 4)), "b": rng.normal(size=(24, 4))}
+    codebook = SharedAnchorCodebook.fit(
+        documents, n_anchors=5, top_m=3, projection=np.eye(4)[:2], random_state=3
+    )
+    first = codebook.occupancy(documents["a"])
+    second = codebook.occupancy(documents["b"])
+    queries = rng.normal(size=(3, 4))
+    first_sketch = MODULE.corpus_sketch(queries, codebook, first)
+    second_sketch = MODULE.corpus_sketch(queries, codebook, second)
+    assert first_sketch.shape == (3, 3 * 4)
+    assert not np.allclose(first_sketch, second_sketch)

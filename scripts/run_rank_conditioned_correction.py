@@ -55,15 +55,14 @@ class CorrectionMLP(nn.Module):
 
 
 def corpus_sketch(queries, codebook, occupancy):
+    """Return flattened Top-M per-anchor query-relative corpus features.
+
+    Unlike a pooled anchor vector, this preserves which fixed semantic cells
+    are dense in the current corpus. ``codebook.projection`` is the shared
+    B128 basis, so each row contains ``[B.T(u_k-q), q.u_k, log(p_D,k)]``.
+    """
     features = codebook.query_features(queries, occupancy)
-    weights = np.exp(features.similarities - features.similarities.max(axis=1, keepdims=True))
-    weights /= np.maximum(weights.sum(axis=1, keepdims=True), 1e-12)
-    selected_anchors = codebook.anchors[features.indices]
-    pooled_anchor = np.sum(weights[..., None] * selected_anchors, axis=1)
-    pooled_log_occupancy = np.sum(
-        weights * occupancy.log_occupancy[features.indices], axis=1, keepdims=True
-    )
-    return np.concatenate([pooled_anchor, pooled_log_occupancy], axis=1).astype(np.float32)
+    return features.values.reshape(len(features.values), -1).astype(np.float32)
 
 
 def build_rank_records(dataset, query_embeddings, documents, hard_k):
@@ -113,7 +112,8 @@ def train_rank_model(
     use_sketch,
     epochs,
     batch_size,
-    train_lambda,
+    train_lambdas,
+    temperature,
     learning_rate,
     weight_decay,
     random_state,
@@ -155,7 +155,8 @@ def train_rank_model(
                 )
                 coordinates = model(features_tensor)
                 deltas = mean_tensor + coordinates @ components_tensor
-                corrected = q_tensor + float(train_lambda) * deltas
+                lambda_ = float(rng.choice(train_lambdas))
+                corrected = q_tensor + lambda_ * deltas
                 corrected = F.normalize(corrected, dim=1)
                 positive_scores = torch.einsum("bd,bpd->bp", corrected, positive_docs)
                 negative_scores = torch.einsum("bd,bnd->bn", corrected, negative_docs)
@@ -164,6 +165,7 @@ def train_rank_model(
                     negative_scores,
                     torch.from_numpy(positive_indices >= 0),
                     torch.from_numpy(negative_indices >= 0),
+                    temperature=temperature,
                 )
                 optimizer.zero_grad()
                 loss.backward()
@@ -174,9 +176,18 @@ def train_rank_model(
 
 
 def multi_positive_hard_negative_loss(
-    positive_scores, negative_scores, positive_mask, negative_mask
+    positive_scores,
+    negative_scores,
+    positive_mask,
+    negative_mask,
+    *,
+    temperature: float = 0.05,
 ):
-    """Compute the requested log-softmax loss with masked variable sets."""
+    """Compute a temperature-scaled masked multi-positive log-softmax loss."""
+    if temperature <= 0 or not np.isfinite(temperature):
+        raise ValueError("temperature must be finite and positive")
+    positive_scores = positive_scores / float(temperature)
+    negative_scores = negative_scores / float(temperature)
     positive_scores = positive_scores.masked_fill(~positive_mask, -torch.inf)
     negative_scores = negative_scores.masked_fill(~negative_mask, -torch.inf)
     numerator = torch.logsumexp(positive_scores, dim=1)
@@ -270,13 +281,6 @@ def run(args):
             top_m=args.top_m,
             random_state=args.random_state,
         )
-        anchor_occupancies = {
-            name: codebook.occupancy(data["documents"])
-            for name, data in loaded.items()
-        }
-        codebook_path = args.output_dir / "models" / f"{model_key}_shared_anchors.npz"
-        codebook_path.parent.mkdir(parents=True, exist_ok=True)
-        codebook.save(codebook_path, **anchor_occupancies)
         for dataset_name in args.datasets:
             data = loaded[dataset_name]
             train_dataset = data["train_dataset"]
@@ -285,12 +289,6 @@ def run(args):
             train_rows = data["train_rows"]
             train_deltas = data["train_deltas"]
             train_missing = data["train_missing"]
-            occupancy = anchor_occupancies[dataset_name]
-            sketches = {
-                "train": corpus_sketch(train_queries, codebook, occupancy),
-                "dev": corpus_sketch(data["dev_queries"], codebook, occupancy),
-                "test": corpus_sketch(data["test_queries"], codebook, occupancy),
-            }
             rank_records = build_rank_records(
                 train_dataset, train_queries, documents, args.hard_negatives
             )
@@ -302,8 +300,6 @@ def run(args):
                 "dev_queries": data["dev_queries"],
                 "test_queries": data["test_queries"],
                 "documents": documents,
-                "sketches": sketches,
-                "train_sketches": sketches["train"],
                 "rank_records": rank_records,
                 "cache_dir": data["cache_dir"],
                 "split_method": data["split_method"],
@@ -311,6 +307,27 @@ def run(args):
             }
             pooled_deltas.append(train_deltas)
         mean, components = fit_pca_subspace(np.concatenate(pooled_deltas), args.rank)
+        # Build query-relative per-anchor features in the shared B128 basis.
+        projected_codebook = SharedAnchorCodebook(
+            codebook.anchors, top_m=args.top_m, projection=components
+        )
+        anchor_occupancies = {
+            name: projected_codebook.occupancy(data["documents"])
+            for name, data in loaded.items()
+        }
+        codebook_path = args.output_dir / "models" / f"{model_key}_shared_anchors.npz"
+        codebook_path.parent.mkdir(parents=True, exist_ok=True)
+        projected_codebook.save(codebook_path, **anchor_occupancies)
+        for dataset_name in args.datasets:
+            data = loaded[dataset_name]
+            occupancy = anchor_occupancies[dataset_name]
+            sketches = {
+                "train": corpus_sketch(data["train_queries"], projected_codebook, occupancy),
+                "dev": corpus_sketch(data["dev_queries"], projected_codebook, occupancy),
+                "test": corpus_sketch(data["test_queries"], projected_codebook, occupancy),
+            }
+            corpora[dataset_name]["sketches"] = sketches
+            corpora[dataset_name]["train_sketches"] = sketches["train"]
         models = {}
         loss_history = {}
         for method, use_sketch in (("rank_q_only", False), ("rank_corpus_sketch", True)):
@@ -321,7 +338,8 @@ def run(args):
                 use_sketch=use_sketch,
                 epochs=args.epochs,
                 batch_size=args.batch_size,
-                train_lambda=args.train_lambda,
+                train_lambdas=args.train_lambdas,
+                temperature=args.temperature,
                 learning_rate=args.learning_rate,
                 weight_decay=args.weight_decay,
                 random_state=args.random_state,
@@ -379,10 +397,13 @@ def run(args):
                 "rank": args.rank,
                 "n_anchors_global": args.n_anchors,
                 "top_m": args.top_m,
+                "per_anchor_features": ["B.T(anchor-query)", "query-anchor-similarity", "log_occupancy"],
+                "per_anchor_feature_width": int(args.rank + 2),
                 "anchor_codebook_fitted_once_per_embedding_model": True,
                 "anchor_codebook": str(codebook_path.relative_to(args.output_dir)),
                 "hard_negatives_per_query": args.hard_negatives,
-                "ranking_train_lambda": args.train_lambda,
+                "ranking_temperature": args.temperature,
+                "ranking_train_lambdas": args.train_lambdas,
                 "epochs": args.epochs,
                 "loss_history": loss_history,
                 "selected_lambdas_from_macro_dev_HitRate@10": selected,
@@ -416,7 +437,13 @@ def build_parser():
     parser.add_argument("--n-anchors", type=int, default=256)
     parser.add_argument("--top-m", type=int, default=16)
     parser.add_argument("--hard-negatives", type=int, default=32)
-    parser.add_argument("--train-lambda", type=float, default=1.0)
+    parser.add_argument("--temperature", type=float, default=0.05)
+    parser.add_argument(
+        "--train-lambdas",
+        nargs="+",
+        type=float,
+        default=[0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0],
+    )
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--learning-rate", type=float, default=1e-3)

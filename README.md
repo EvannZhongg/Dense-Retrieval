@@ -100,7 +100,11 @@ negative scores. The script compares `rank_q_only` with
 `rank_corpus_sketch`; the latter receives the current corpus's Top-M shared-anchor
 sketch with occupancy features, and its negatives are generated from that same corpus. Both models use
 the same train/dev/test splits, architecture, ranking loss, and macro-dev
-lambda selection.
+lambda selection. The ranking path now preserves flattened per-anchor
+`[B.T(anchor-query), query-anchor-similarity, log_occupancy]` features instead
+of pooling the anchors into a query-only vector. Its ranking loss uses
+temperature `0.05`, and training samples correction magnitudes from the same
+lambda set used during dev selection.
 
 Corpus-specific rank Oracle
 ---------------------------
