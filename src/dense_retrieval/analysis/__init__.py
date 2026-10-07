@@ -22,6 +22,18 @@ from .query_correction import (
     project_deltas,
     select_oracle_positives,
 )
+from .shared_anchors import (
+    CorpusAnchorOccupancy,
+    QueryAnchorFeatures,
+    SharedAnchorCodebook,
+    build_query_anchor_features,
+    compute_corpus_anchor_occupancy,
+    compute_corpus_occupancies,
+    fit_global_anchor_codebook,
+    fit_shared_anchor_codebook,
+    query_anchor_features,
+    select_top_anchors,
+)
 
 __all__ = [
     "summarize_results",
@@ -44,4 +56,14 @@ __all__ = [
     "prepare_correction_data",
     "project_deltas",
     "select_oracle_positives",
+    "CorpusAnchorOccupancy",
+    "QueryAnchorFeatures",
+    "SharedAnchorCodebook",
+    "fit_global_anchor_codebook",
+    "fit_shared_anchor_codebook",
+    "compute_corpus_anchor_occupancy",
+    "compute_corpus_occupancies",
+    "select_top_anchors",
+    "build_query_anchor_features",
+    "query_anchor_features",
 ]

@@ -49,10 +49,30 @@ Reference runs for FiQA and ArguAna across the Qwen3-Embedding, BGE-M3, and E5-B
 
 The first version intentionally uses exact in-memory retrieval. PostgreSQL/pgvector can be added behind the retrieval interface later without changing dataset/model adapters.
 
+Shared Anchor Occupancy
+-----------------------
+
+For each embedding model, the shared-corpus experiments fit one fixed anchor
+codebook from the union of all selected corpus document embeddings. The default
+is `K=256`; each corpus stores only its anchor occupancy `p[D,k]`, plus optional
+per-cell distance and low-dimensional shape statistics. A query uses the same
+Top-M anchor indices and query-side anchor features for every corpus, while the
+`log(p[D,k])` feature changes with the corpus. This keeps the semantic regions
+comparable when the knowledge base changes. The reusable implementation is in
+`dense_retrieval.analysis.shared_anchors`.
+
+Run the shared regression experiment with:
+`python scripts/run_shared_corpus_correction.py --models e5`
+
+The rank-conditioned experiment uses the same global codebook:
+`python scripts/run_rank_conditioned_correction.py --models e5`
+
 Prototype Correction Field
 --------------------------
 
-The frozen corpus can also provide a compact query-side correction prior. Run
+The legacy single-corpus command can also provide a compact query-side
+correction prior. Shared multi-corpus runs should use the anchor-occupancy
+commands above. Run
 `python scripts/run_prototype_correction.py --datasets fiqa --models e5` to fit
 64 spherical K-Means document prototypes, retain the Top-8 prototype weights
 for each query, and learn one correction coordinate vector per prototype from
@@ -67,6 +87,20 @@ The reusable implementation is in
 `PrototypeCorrectionField`. When correction values are low-rank coordinates,
 pass the PCA `mean` and `components` to the field so it can reconstruct a
 full-dimensional delta before applying it to a normalized query.
+
+Ranking-supervised corpus conditioning
+---------------------------------------
+
+The regression target `d_positive - q` is corpus-independent, so it cannot
+learn that a query may need a different movement when a corpus contains extra
+hard negatives. `scripts/run_rank_conditioned_correction.py` addresses this by
+fitting one global `mu,B` from the pooled training corpora and optimizing the
+query correction directly against frozen-corpus positive and baseline hard
+negative scores. The script compares `rank_q_only` with
+`rank_corpus_sketch`; the latter receives the current corpus's Top-M shared-anchor
+sketch with occupancy features, and its negatives are generated from that same corpus. Both models use
+the same train/dev/test splits, architecture, ranking loss, and macro-dev
+lambda selection.
 
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 

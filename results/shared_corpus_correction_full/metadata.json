@@ -1,0 +1,218 @@
+[
+  {
+    "model": "qwen3",
+    "datasets": [
+      "fiqa",
+      "arguana",
+      "scifact",
+      "nfcorpus"
+    ],
+    "shared_predictors_per_embedding_model": 1,
+    "pooled_train_queries": 6916,
+    "corpus_balanced_loss": true,
+    "rank": 128,
+    "n_anchors_global": 256,
+    "top_m": 16,
+    "anchor_codebook_fitted_once_per_embedding_model": true,
+    "anchor_codebook": "models\\qwen3_shared_anchors.npz",
+    "linear_q_alpha": 1.0,
+    "linear_sketch_alpha": 1.0,
+    "mlp_hidden_layer_sizes": [
+      256
+    ],
+    "mlp_q_n_iter": 37,
+    "mlp_sketch_n_iter": 40,
+    "selected_lambdas_from_macro_dev_HitRate@10": {
+      "baseline": 0.0,
+      "global_mean": 0.0,
+      "shared_linear_q_only": 0.3,
+      "shared_linear_sketch": 0.3,
+      "shared_mlp_q_only": 0.5,
+      "shared_mlp_sketch": 0.3
+    },
+    "test_qrels_used_for_training_or_selection": false,
+    "corpora": {
+      "fiqa": {
+        "split_method": "official FiQA train/dev/test qrels",
+        "train_queries_used": 5500,
+        "dev_queries": 500,
+        "test_queries": 648,
+        "train_missing_positive": [],
+        "documents": 57638
+      },
+      "arguana": {
+        "split_method": "stable SHA-256 70/30 split of arguana test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 980,
+        "dev_queries": 211,
+        "test_queries": 211,
+        "train_missing_positive": [
+          "test-free-speech-debate-yfsdfkhbwu-con03a",
+          "test-education-ufsdfkhbwu-con03a",
+          "test-politics-dhwem-pro06a",
+          "test-society-asfhwapg-con04a"
+        ],
+        "documents": 8674
+      },
+      "scifact": {
+        "split_method": "stable SHA-256 70/30 split of scifact test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 210,
+        "dev_queries": 45,
+        "test_queries": 45,
+        "train_missing_positive": [],
+        "documents": 5183
+      },
+      "nfcorpus": {
+        "split_method": "stable SHA-256 70/30 split of nfcorpus test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 226,
+        "dev_queries": 48,
+        "test_queries": 49,
+        "train_missing_positive": [],
+        "documents": 3633
+      }
+    }
+  },
+  {
+    "model": "bge-m3",
+    "datasets": [
+      "fiqa",
+      "arguana",
+      "scifact",
+      "nfcorpus"
+    ],
+    "shared_predictors_per_embedding_model": 1,
+    "pooled_train_queries": 6916,
+    "corpus_balanced_loss": true,
+    "rank": 128,
+    "n_anchors_global": 256,
+    "top_m": 16,
+    "anchor_codebook_fitted_once_per_embedding_model": true,
+    "anchor_codebook": "models\\bge-m3_shared_anchors.npz",
+    "linear_q_alpha": 1.0,
+    "linear_sketch_alpha": 1.0,
+    "mlp_hidden_layer_sizes": [
+      256
+    ],
+    "mlp_q_n_iter": 37,
+    "mlp_sketch_n_iter": 47,
+    "selected_lambdas_from_macro_dev_HitRate@10": {
+      "baseline": 0.0,
+      "global_mean": 0.0,
+      "shared_linear_q_only": 0.75,
+      "shared_linear_sketch": 0.75,
+      "shared_mlp_q_only": 0.5,
+      "shared_mlp_sketch": 0.5
+    },
+    "test_qrels_used_for_training_or_selection": false,
+    "corpora": {
+      "fiqa": {
+        "split_method": "official FiQA train/dev/test qrels",
+        "train_queries_used": 5500,
+        "dev_queries": 500,
+        "test_queries": 648,
+        "train_missing_positive": [],
+        "documents": 57638
+      },
+      "arguana": {
+        "split_method": "stable SHA-256 70/30 split of arguana test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 980,
+        "dev_queries": 211,
+        "test_queries": 211,
+        "train_missing_positive": [
+          "test-free-speech-debate-yfsdfkhbwu-con03a",
+          "test-education-ufsdfkhbwu-con03a",
+          "test-politics-dhwem-pro06a",
+          "test-society-asfhwapg-con04a"
+        ],
+        "documents": 8674
+      },
+      "scifact": {
+        "split_method": "stable SHA-256 70/30 split of scifact test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 210,
+        "dev_queries": 45,
+        "test_queries": 45,
+        "train_missing_positive": [],
+        "documents": 5183
+      },
+      "nfcorpus": {
+        "split_method": "stable SHA-256 70/30 split of nfcorpus test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 226,
+        "dev_queries": 48,
+        "test_queries": 49,
+        "train_missing_positive": [],
+        "documents": 3633
+      }
+    }
+  },
+  {
+    "model": "e5",
+    "datasets": [
+      "fiqa",
+      "arguana",
+      "scifact",
+      "nfcorpus"
+    ],
+    "shared_predictors_per_embedding_model": 1,
+    "pooled_train_queries": 6916,
+    "corpus_balanced_loss": true,
+    "rank": 128,
+    "n_anchors_global": 256,
+    "top_m": 16,
+    "anchor_codebook_fitted_once_per_embedding_model": true,
+    "anchor_codebook": "models\\e5_shared_anchors.npz",
+    "linear_q_alpha": 1.0,
+    "linear_sketch_alpha": 1.0,
+    "mlp_hidden_layer_sizes": [
+      256
+    ],
+    "mlp_q_n_iter": 49,
+    "mlp_sketch_n_iter": 85,
+    "selected_lambdas_from_macro_dev_HitRate@10": {
+      "baseline": 0.0,
+      "global_mean": 0.5,
+      "shared_linear_q_only": 0.5,
+      "shared_linear_sketch": 0.75,
+      "shared_mlp_q_only": 0.5,
+      "shared_mlp_sketch": 1.0
+    },
+    "test_qrels_used_for_training_or_selection": false,
+    "corpora": {
+      "fiqa": {
+        "split_method": "official FiQA train/dev/test qrels",
+        "train_queries_used": 5500,
+        "dev_queries": 500,
+        "test_queries": 648,
+        "train_missing_positive": [],
+        "documents": 57638
+      },
+      "arguana": {
+        "split_method": "stable SHA-256 70/30 split of arguana test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 980,
+        "dev_queries": 211,
+        "test_queries": 211,
+        "train_missing_positive": [
+          "test-free-speech-debate-yfsdfkhbwu-con03a",
+          "test-education-ufsdfkhbwu-con03a",
+          "test-politics-dhwem-pro06a",
+          "test-society-asfhwapg-con04a"
+        ],
+        "documents": 8674
+      },
+      "scifact": {
+        "split_method": "stable SHA-256 70/30 split of scifact test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 210,
+        "dev_queries": 45,
+        "test_queries": 45,
+        "train_missing_positive": [],
+        "documents": 5183
+      },
+      "nfcorpus": {
+        "split_method": "stable SHA-256 70/30 split of nfcorpus test queries; deterministic dev/test split of holdout",
+        "train_queries_used": 226,
+        "dev_queries": 48,
+        "test_queries": 49,
+        "train_missing_positive": [],
+        "documents": 3633
+      }
+    }
+  }
+]
