@@ -37,3 +37,13 @@ python scripts/evaluate_baseline.py --cache cache/fiqa/qwen3-embedding-0.6b/<fin
 This reads existing embeddings only, performs exact inner-product retrieval, and writes `results/<dataset>/<model>/baseline.json` with HitRate, Recall, MRR, NDCG, and provenance. It never re-encodes data or runs query correction.
 
 Run infrastructure tests with `pytest`.
+
+## Query-side adaptation experiments
+
+The independent `dense_retrieval.adaptation` package provides an
+index-preserving ridge calibrator. It transforms only query vectors and leaves
+the cached document vectors untouched. Use
+`scripts/run_adaptation.py --mode gold` for a qrels-backed diagnostic reference
+or `--mode corpus` for the no-qrels corpus-alignment baseline. Both commands
+write metrics and a provenance sidecar next to the calibrator; see
+`docs/query_adaptation_experiment.md` for split and leakage requirements.
