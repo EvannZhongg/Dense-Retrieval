@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from typing import Dict, List
 
 @dataclass(frozen=True)
 class DatasetSample:
@@ -19,6 +19,7 @@ class RetrievalDataset:
     queries: List[DatasetSample]
     corpus: Dict[str, Document]
     qrels: Dict[str, Dict[str, int]]
+    split: str = "test"
 
     @property
     def query_texts(self) -> List[str]:

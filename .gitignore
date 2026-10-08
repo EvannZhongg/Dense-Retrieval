@@ -3,29 +3,7 @@
 __pycache__/
 .pytest_cache/
 *.pyc
-
-# Root-level run artifacts only. Do not use "datasets/" unanchored: it would
-# also match src/dense_retrieval/datasets/, silently dropping source modules.
 /cache/
 /datasets/
 /tmp/
-
-# Fitted correction artifacts (subspace bases, prototype fields, ridge weights)
-# are reproducible from the embedding cache, so only the CSV/PNG/JSON outputs of
-# the reference runs are committed.
-/results/**/*.npz
-
-# Subset smoke runs are throwaway verification outputs, not reference results.
-# Trailing * so suffixed variants ("..._smoke256") are covered too.
-/results/*_smoke*/
-
-# local scratch probe scripts with machine-specific paths
-scripts/probe_query_calibration.py
-
-# Third-party paper PDFs are a local reading library, not a project artifact.
 /Papers/
-
-# The per-query-pair stability matrix is a large intermediate dump. The
-# reference outputs of that audit are findings.md, stability_summary.csv and
-# run_query_metrics.csv.
-/results/*/pairwise_query_stability.csv

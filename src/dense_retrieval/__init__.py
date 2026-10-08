@@ -1,2 +1,1 @@
-"""Config-driven dense retrieval evaluation toolkit."""
-
+"""Minimal dataset, embedding-cache, and frozen baseline infrastructure."""

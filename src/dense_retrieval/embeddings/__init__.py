@@ -1,13 +1,14 @@
 from .base import EmbeddingModel, HashEmbeddingModel, create_embedding_model
-from .cache import cached_encode_queries, find_cache_dir, find_query_cache_path
-from .registry import MODEL_SPECS
+from .cache import encode_with_resume, load_cache, save_cache, cache_fingerprint
+from .config import load_model_config
 
 __all__ = [
     "EmbeddingModel",
     "HashEmbeddingModel",
-    "MODEL_SPECS",
-    "cached_encode_queries",
+    "encode_with_resume",
+    "load_cache",
+    "save_cache",
+    "cache_fingerprint",
+    "load_model_config",
     "create_embedding_model",
-    "find_cache_dir",
-    "find_query_cache_path",
 ]

@@ -1,12 +1,8 @@
-numpy>=2.3,<2.6
-pandas
-pyarrow
+numpy>=1.24
 pyyaml
 python-dotenv
 requests
 openai
-scipy>=1.18,<1.19
-matplotlib
-scikit-learn
 sentence-transformers
 beir
+pytest

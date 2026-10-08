@@ -61,7 +61,7 @@ def load_beir_dataset(
                 qid, did, score = parts[:3]
                 qrels.setdefault(str(qid), {})[str(did)] = int(float(score))
     samples = [DatasetSample(qid, queries[qid], [did for did, score in rels.items() if score > 0]) for qid, rels in qrels.items() if qid in queries]
-    dataset = RetrievalDataset(name=name, queries=samples, corpus=corpus, qrels=qrels)
+    dataset = RetrievalDataset(name=name, queries=samples, corpus=corpus, qrels=qrels, split=split)
     if missing_relevant_policy not in {"error", "keep"}:
         raise ValueError("missing_relevant_policy must be 'error' or 'keep'")
     dataset.validate(allow_missing_relevant_documents=missing_relevant_policy == "keep")

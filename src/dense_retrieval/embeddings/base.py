@@ -129,8 +129,9 @@ class HostedEmbeddingAdapter(EmbeddingModel):
         return list(texts)
 
     def _sanitize_texts(self, texts: Sequence[str]) -> list[str]:
+        placeholder = getattr(self, "empty_text_placeholder", "[EMPTY]")
         return [
-            text if text and text.strip() else self.empty_text_placeholder
+            text if text and text.strip() else placeholder
             for text in texts
         ]
 
