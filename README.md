@@ -232,6 +232,123 @@ justify another prototype, covariance, or boundary-sketch expansion. See
 The complete evidence chain and stopping decision are summarized in
 `results/query_calibration_conclusion.md`.
 
+Action-space audit
+------------------
+
+The previous low-rank study measured only PCA projection of a nearest-positive
+delta.  That is a target-reconstruction diagnostic, not a complete test of
+whether the action space can change a ranking.  The independent audit
+`scripts/run_action_space_audit.py` therefore compares four nested bases under
+strict leave-one-corpus-out folds:
+
+- `delta_svd`: ordinary zero-origin SVD of training nearest-positive deltas;
+- `tangent_delta_svd`: the same deltas after removing each query's radial
+  component;
+- `ranking_boundary_svd`: SVD of first-order positive versus hard-negative
+  ranking directions;
+- `random_subspace`: a reproducible orthonormal control.
+
+It reports both projected nearest-positive oracle retrieval and a privileged
+direct ranking oracle that optimizes one coordinate vector per held-out query.
+The latter uses held-out qrels only as a capacity upper bound and is not a
+deployable method.  Run the text-small audit with:
+
+```powershell
+python scripts/run_action_space_audit.py --models text-embedding-3-small-aiberm
+```
+
+On the current four-corpus text-small run, rank 32 ranking-boundary projection
+retains 31.1% of full-oracle NDCG gain versus 28.6% for delta SVD, while the
+direct rank oracle retains 78.5% versus 76.3%.  Rank 64 direct oracles retain
+85.7% and 85.2%, respectively.  A random rank-32 space retains 82.3% in the
+privileged direct oracle, so this result does not validate random corrections;
+it shows that rank 32 has substantial ranking capacity and that the earlier
+negative predictor results should be attributed primarily to target/predictor
+alignment, not to PCA explained variance alone.  All results are written under
+`results/action_space_audit_text_small/`, with the protocol and qrels usage in
+`metadata.json`.
+
+Direct ranking-coordinate LOCO
+------------------------------
+
+To test target mismatch directly, `scripts/run_direct_coordinate_loco.py`
+optimizes a privileged hard-negative ranking coordinate for each training query
+inside the shared rank-32 ranking-boundary basis, then fits matched Ridge
+predictors from either `q_only` or query-conditioned document-spectrum
+interactions.  The spectrum is document-only: a shared sampled SVD basis is fit
+on training corpora, while each corpus contributes only projected mean and
+variance statistics.  No held-out qrels enter feature construction, fitting, or
+lambda selection, and online features do not materialize a document score list.
+
+The four-corpus text-small run and an independent Qwen3 replication both fail
+to show a transferable corpus increment.  On text-small, mean NDCG@10 is
+`0.4959` for frozen retrieval, `0.4877` for q-only correction, and `0.3001`
+for corpus-spectral correction.  On Qwen3 the corresponding values are
+`0.5061`, `0.5038`, and `0.4302`.  Corpus-spectral coordinate MSE is also above
+q-only in every held-out fold.  The result is a negative falsification of this
+simple corpus-conditioned ranking target, not evidence that every possible
+document representation is impossible; it reinforces that increasing feature
+capacity without a transferable utility signal is not justified.
+
+Ranking-optimum stability audit
+-------------------------------
+
+A high privileged ranking oracle does not imply that its coordinates define a
+stable learning target. `scripts/run_ranking_optimum_stability.py` tests this
+directly without fitting another predictor. For each held-out query it holds a
+LOCO-fitted rank-32 ranking-boundary basis fixed, independently re-optimizes the
+oracle, and perturbs one factor at a time: initialization, hard-negative sample,
+optimizer seed, negative count, or regularization. It reports pairwise
+coordinate/displacement cosine alongside NDCG@10, MRR@10, Top-10 overlap, and
+positive-margin stability. Run the audit with:
+
+```powershell
+python scripts/run_ranking_optimum_stability.py `
+  --models text-embedding-3-small-aiberm `
+  --output-dir results/ranking_optimum_stability_text_small
+```
+
+The optimizer-seed-only group is a deterministic control. The key failure mode
+is low coordinate cosine combined with stable rankings: that result would show
+that the ranking objective admits many equivalent corrections and that direct
+coordinate regression is ill-posed, even when oracle retention is high.
+
+The text-small result does not show that failure mode broadly. Mean coordinate
+cosine is `0.9798` across initialization reruns, `1.0000` for the optimizer-seed
+control, and `0.9973` under small regularization changes. Changing the negative
+sample or count lowers cosine to `0.9043` and `0.9339`, but Top-10 overlap also
+falls to `0.6718` and `0.6669`; no directionally distinct pair (cosine below
+`0.2`) retains at least `0.8` Top-10 overlap with stable NDCG and MRR. Thus the
+fixed objective is substantially identifiable under these perturbations. The
+stronger issue is sensitivity to how the privileged hard-negative objective is
+defined, not many orthogonal, retrieval-equivalent optima within one objective.
+
+Candidate-action utility scoring
+--------------------------------
+
+`scripts/run_candidate_action_loco.py` removes the requirement to regress one
+privileged coordinate. In each strict LOCO fold it clusters training-only
+ranking corrections into a small direction/magnitude action codebook, labels
+every training action with its actual per-query NDCG@10 gain, and compares
+matched query-only, fixed-reference, and corpus-local utility scorers. Zero
+correction is always available, and the selected action is applied before the
+single final retrieval.
+
+```powershell
+python scripts/run_candidate_action_loco.py `
+  --models text-embedding-3-small-aiberm `
+  --output-dir results/candidate_action_loco_text_small
+```
+
+The action set has mean privileged held-out headroom of `+0.0302` NDCG, but the
+learned policy does not transfer. Query-only scoring loses to frozen retrieval
+in all four corpora. Corpus-local scoring has one win, one tie, and two losses,
+with mean NDCG `0.4937` versus `0.4959` for frozen retrieval. This is evidence
+against coordinate-target mismatch as the primary remaining explanation: even
+direct utility supervision with exact abstention fails under the current
+pre-retrieval corpus observables. Full results and per-corpus correction rates
+are in `results/candidate_action_loco_text_small/findings.md`.
+
 ArguAna is supported as a local BEIR dataset under `datasets/arguana`. The official release contains five qrels whose relevant document is absent from the official corpus. ArguAna configs explicitly use `missing_relevant_policy: keep`: those queries remain in the 1,406-query evaluation denominator, count as retrieval misses, expose missing-positive counts in per-query output, and have unavailable positive geometry/oracle fields.
 
 NFCorpus and SciFact are supported as local BEIR datasets under `datasets/nfcorpus` and `datasets/scifact`. Ready-to-run test-split configs are provided for Qwen3, BGE-M3, and E5 Base v2.

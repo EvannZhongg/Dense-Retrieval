@@ -21,3 +21,11 @@ __pycache__/
 
 # local scratch probe scripts with machine-specific paths
 scripts/probe_query_calibration.py
+
+# Third-party paper PDFs are a local reading library, not a project artifact.
+/Papers/
+
+# The per-query-pair stability matrix is a large intermediate dump. The
+# reference outputs of that audit are findings.md, stability_summary.csv and
+# run_query_metrics.csv.
+/results/*/pairwise_query_stability.csv

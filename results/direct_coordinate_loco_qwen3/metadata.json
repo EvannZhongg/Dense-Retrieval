@@ -1,0 +1,162 @@
+{
+  "protocol": "leave-one-corpus-out direct ranking-coordinate prediction",
+  "methods": [
+    "q_only",
+    "corpus_spectral"
+  ],
+  "folds": [
+    {
+      "model": "Qwen3",
+      "heldout_corpus": "fiqa",
+      "training_corpora": [
+        "arguana",
+        "scifact",
+        "nfcorpus"
+      ],
+      "rank": 32,
+      "spectrum_rank": 32,
+      "basis": "ranking_boundary_svd fitted on training qrels only",
+      "corpus_features": "document-only shared spectral basis plus corpus mean/variance interactions",
+      "heldout_qrels_used_for_features": false,
+      "heldout_qrels_used_for_training_or_selection": false,
+      "oracle_losses_training_corpora": {
+        "arguana": {
+          "train": 0.2568904459476471,
+          "dev": 0.30724963545799255
+        },
+        "scifact": {
+          "train": 0.07588596642017365,
+          "dev": 0.1504535675048828
+        },
+        "nfcorpus": {
+          "train": 0.02578275091946125,
+          "dev": 0.052587658166885376
+        }
+      },
+      "selected_lambdas": {
+        "q_only": 0.1,
+        "corpus_spectral": 0.1
+      }
+    },
+    {
+      "model": "Qwen3",
+      "heldout_corpus": "arguana",
+      "training_corpora": [
+        "fiqa",
+        "scifact",
+        "nfcorpus"
+      ],
+      "rank": 32,
+      "spectrum_rank": 32,
+      "basis": "ranking_boundary_svd fitted on training qrels only",
+      "corpus_features": "document-only shared spectral basis plus corpus mean/variance interactions",
+      "heldout_qrels_used_for_features": false,
+      "heldout_qrels_used_for_training_or_selection": false,
+      "oracle_losses_training_corpora": {
+        "fiqa": {
+          "train": 0.05596494302153587,
+          "dev": 0.05886564776301384
+        },
+        "scifact": {
+          "train": 0.20927830040454865,
+          "dev": 0.24936959147453308
+        },
+        "nfcorpus": {
+          "train": 0.09690320491790771,
+          "dev": 0.11736827343702316
+        }
+      },
+      "selected_lambdas": {
+        "q_only": 0.1,
+        "corpus_spectral": 0.1
+      }
+    },
+    {
+      "model": "Qwen3",
+      "heldout_corpus": "scifact",
+      "training_corpora": [
+        "fiqa",
+        "arguana",
+        "nfcorpus"
+      ],
+      "rank": 32,
+      "spectrum_rank": 32,
+      "basis": "ranking_boundary_svd fitted on training qrels only",
+      "corpus_features": "document-only shared spectral basis plus corpus mean/variance interactions",
+      "heldout_qrels_used_for_features": false,
+      "heldout_qrels_used_for_training_or_selection": false,
+      "oracle_losses_training_corpora": {
+        "fiqa": {
+          "train": 0.05675268918275833,
+          "dev": 0.06021721288561821
+        },
+        "arguana": {
+          "train": 0.3594585955142975,
+          "dev": 0.37878942489624023
+        },
+        "nfcorpus": {
+          "train": 0.10385546833276749,
+          "dev": 0.11031707376241684
+        }
+      },
+      "selected_lambdas": {
+        "q_only": 0.1,
+        "corpus_spectral": 0.1
+      }
+    },
+    {
+      "model": "Qwen3",
+      "heldout_corpus": "nfcorpus",
+      "training_corpora": [
+        "fiqa",
+        "arguana",
+        "scifact"
+      ],
+      "rank": 32,
+      "spectrum_rank": 32,
+      "basis": "ranking_boundary_svd fitted on training qrels only",
+      "corpus_features": "document-only shared spectral basis plus corpus mean/variance interactions",
+      "heldout_qrels_used_for_features": false,
+      "heldout_qrels_used_for_training_or_selection": false,
+      "oracle_losses_training_corpora": {
+        "fiqa": {
+          "train": 0.05682598799467087,
+          "dev": 0.06015276163816452
+        },
+        "arguana": {
+          "train": 0.35967037081718445,
+          "dev": 0.37867119908332825
+        },
+        "scifact": {
+          "train": 0.22420567274093628,
+          "dev": 0.2548121511936188
+        }
+      },
+      "selected_lambdas": {
+        "q_only": 0.1,
+        "corpus_spectral": 0.2
+      }
+    }
+  ],
+  "alphas": [
+    0.001,
+    0.01,
+    0.1,
+    1.0,
+    10.0,
+    100.0
+  ],
+  "lambdas": [
+    0.0,
+    0.1,
+    0.2,
+    0.3,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "hard_negatives": 32,
+  "temperature": 0.05,
+  "oracle_steps": 100,
+  "device": "auto"
+}
