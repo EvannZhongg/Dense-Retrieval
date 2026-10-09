@@ -52,3 +52,17 @@ models:
       type: aiberm
       api_key_env: AIBERM_API_KEY
       base_url: https://aiberm.com/v1
+
+llms:
+  deepseek-flash:
+    interface: openai-chat
+    model_id: deepseek-flash
+    revision: deepseek-api
+    temperature: 0.0
+    max_tokens: 2048
+    provider:
+      type: openai-compatible
+      api_key_env: DEEPSEEK_API_KEY
+      base_url: https://api.deepseek.com/v1
+      timeout_seconds: 120
+      max_retries: 5
