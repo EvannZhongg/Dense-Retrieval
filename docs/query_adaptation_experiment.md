@@ -43,6 +43,13 @@ disjoint:
 python scripts/run_adaptation.py --cache <test-cache> --train-query-cache <train-cache> --mode gold --train-split train --eval-split test
 ```
 
+For adaptation training, encode only the train queries; this avoids creating a
+duplicate document cache:
+
+```text
+python scripts/encode_queries.py --dataset scifact --model qwen3-embedding-0.6b --split train --cache-root adaptation_cache
+```
+
 Corpus mode encodes corpus text through the query protocol, checkpointing that
 additional query-side array under the adaptation output directory:
 

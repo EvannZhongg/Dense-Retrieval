@@ -73,4 +73,8 @@ def load_cache(cache_dir: str | Path) -> tuple[np.ndarray, np.ndarray, dict]:
     documents = np.load(cache_dir / "documents.npy")
     if len(queries) != len(manifest.get("query_ids", [])) or len(documents) != len(manifest.get("document_ids", [])):
         raise ValueError("cache arrays and manifest ids have inconsistent lengths")
+    if documents.ndim != 2 or queries.ndim != 2:
+        raise ValueError("cache arrays must be rank-2")
+    if len(documents) == 0 and manifest.get("document_ids"):
+        raise ValueError("non-empty document_ids require document embeddings")
     return queries, documents, manifest

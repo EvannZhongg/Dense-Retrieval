@@ -47,3 +47,7 @@ the cached document vectors untouched. Use
 or `--mode corpus` for the no-qrels corpus-alignment baseline. Both commands
 write metrics and a provenance sidecar next to the calibrator; see
 `docs/query_adaptation_experiment.md` for split and leakage requirements.
+
+When train and evaluation query IDs are disjoint, use
+`scripts/encode_queries.py` to create a query-only train cache. It stores no
+second copy of the frozen document vectors.

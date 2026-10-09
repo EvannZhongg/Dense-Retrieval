@@ -66,3 +66,21 @@ def load_beir_dataset(
         raise ValueError("missing_relevant_policy must be 'error' or 'keep'")
     dataset.validate(allow_missing_relevant_documents=missing_relevant_policy == "keep")
     return dataset
+
+
+def load_beir_corpus(
+    name: str,
+    root: str | Path = "datasets",
+    download: bool = False,
+) -> Dict[str, Document]:
+    """Load only corpus text, without opening queries or qrels."""
+    base = _resolve_root(name.lower(), root, download)
+    corpus: Dict[str, Document] = {}
+    for row in _read_jsonl(base / "corpus.jsonl"):
+        doc_id = str(row.get("_id", row.get("id")))
+        corpus[doc_id] = Document(
+            doc_id,
+            str(row.get("title", "") or ""),
+            str(row.get("text", "") or ""),
+        )
+    return corpus

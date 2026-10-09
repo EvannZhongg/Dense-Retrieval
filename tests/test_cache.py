@@ -19,3 +19,22 @@ def test_manifest_order_matches_arrays(tmp_path):
     queries, documents, loaded = load_cache(tmp_path)
     assert loaded == manifest
     assert queries.shape == documents.shape == (1, 2)
+
+
+def test_query_only_cache_round_trip(tmp_path):
+    manifest = {
+        "query_ids": ["q1", "q2"],
+        "document_ids": [],
+        "dataset": "toy",
+        "cache_kind": "query_only",
+    }
+    save_cache(
+        tmp_path,
+        np.ones((2, 3), dtype=np.float32),
+        np.empty((0, 3), dtype=np.float32),
+        manifest,
+    )
+    queries, documents, loaded = load_cache(tmp_path)
+    assert loaded == manifest
+    assert queries.shape == (2, 3)
+    assert documents.shape == (0, 3)
