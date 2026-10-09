@@ -1,0 +1,310 @@
+[
+  {
+    "file": "Align Then Adapt Label-Efficient Adapter Learning for Asymmetric Dense Retrieval.pdf",
+    "title": "Align Then Adapt: Label-Efficient Adapter Learning for Asymmetric Dense Retrieval",
+    "venue": "arXiv preprint (arXiv:2604.03403)",
+    "year": 2026,
+    "overview": "论文针对稠密检索中越来越常见的非对称问题：查询是复杂、指令式的长文本，而文档集合相对简单且静态；此时理解查询需要强 embedding 模型，而高效索引文档只能靠轻量模型，两者之间既有模型间的表示鸿沟，又有 query-document 的语义鸿沟。作者提出 Efficient Retrieval Adapter (ERA)，一个 query 侧、无需重建索引的检索适配器训练框架，把 adapter 训练拆成两阶段：先用未标注语料做自监督对齐（alignment），再用少量标注 query-document 对做有监督适配（adaptation）。在 MAIR 基准 126 个任务、6 个域上，ERA 作为线性 adapter 就能把强 query embedder 与弱 document embedder 组合起来，nDCG@10 相较 zero-shot 最多提升约 12 分（非对称设定），且每任务不到 100 个标注样本即有效。核心结论是：保持 backbone embedder 冻结、不重建文档索引，也能通过增强 query 侧表示获得检索收益。",
+    "technical_approach": [
+      "问题设定：非对称稠密检索，query 由强 embedder（如 Qwen3-8B 等 LLM embedder）编码，document 由轻量 embedder（如 Qwen3-0.6B、OpenAI-small、BGE-M3）编码，两侧处于不同 embedding 空间；backbone embedder 与文档索引都冻结，只训练 query 侧的轻量 adapter，且无需访问 base 模型参数（兼容黑盒 API）。",
+      "Adapter 形式：一个线性变换矩阵 W∈R^{hq×hd}，把 query embedding 映射到 document 空间；适配后的 query 表示为 Eq(q)W，再做 L2 归一化，检索用余弦相似度 sim(Eq(q)W, Ed(d))。",
+      "第一阶段——自监督对齐（alignment）：从目标语料采样无标注文档，同一篇文档分别经 query embedder 得 Eq(d)、经 document embedder 得 Ed(d)，训练 W 最大化 sim(Eq(d)W, Ed(d))，以桥接两个模型/模型家族之间的表示鸿沟与语义鸿沟。",
+      "第二阶段——有监督适配（adaptation）：用少量标注三元组 (q, d+, {d-})，通过对比损失（InfoNCE 或 triplet loss）同时最大化适配 query 与正例文档的相似度、最小化与负例文档的相似度，捕捉对齐阶段未建模的语义细节。",
+      "负样本挖掘：在 alignment 之后用 TopK-PercPos 依据检索分数选取硬负样本，实验显示优于 naive top-k 与随机负采样（naive top-k 会因 false negative 而降性能）；对负样本数量鲁棒，5 个即接近最优。",
+      "训练细节：alignment 阶段每任务采样 1000 篇无标注文档、100 epochs、lr 1e-3、weight decay 1e-2、batch 256；adaptation 阶段最多 1000 epochs、基于验证损失的早停（patience 5）、lr 1e-5、weight decay 1e-4、batch 256。",
+      "域通用性：在全部任务/域上训练一个共享 adapter（域内与域外实验表明线性变换不易过拟合，单一通用 adapter 与域专属 adapter 性能接近），无需分域适配。",
+      "推理阶段：query 仅经 Eq 编码一次并乘 W，即可与已冻结的文档向量做一次余弦相似度检索，不更新模型、不重建索引。",
+      "实验与结论：在 MAIR（126 任务、6 域：Academic/Code/Finance/Legal/Medical/Web）上以 nDCG@10 为主指标，非对称 ERA 一致优于 zero-shot 与对称 ERA；文档 embedder 越弱提升越明显（OpenAI-small、BGE-M3 提升超过 12%），且 5%（约 500 条）标注即可见效。"
+    ],
+    "key_terms": [
+      "非对称稠密检索 Asymmetric Dense Retrieval",
+      "检索适配器 Retrieval Adapter",
+      "自监督对齐 Self-supervised Alignment",
+      "有监督适配 Supervised Adaptation",
+      "硬负样本挖掘 Hard Negative Mining (TopK-PercPos)",
+      "免重建索引 re-index-free"
+    ],
+    "relevance_to_query_side_calibration": "高度相关，几乎是本课题设定最贴近的现有工作之一：它正是把纠正完全放在 query embedding 侧（线性 adapter W 作用于 query embedding）、保持 backbone embedder 与文档向量/索引冻结、线上仍只做一次最近邻检索。它提供了一套可直接借鉴的两阶段训练范式——先用未标注语料文档做跨空间对齐、再用少量标注对做有监督适配，与本课题“先用无标注知识库构造监督、再训练轻量 query-only adapter”的路线一致。可借鉴的具体点包括：线性 query 侧 adapter 的设计、对齐阶段用同一文档跨两个 embedder 构成正例、以及 alignment 后基于检索分数的硬负样本挖掘。限制是它第二阶段的适配仍依赖真实标注 query-document 对，尚未解决“用 synthetic queries 在无标注知识库中自动重构监督”的问题。"
+  },
+  {
+    "file": "Augmented Embeddings for Custom Retrievals.pdf",
+    "title": "Augmented Embeddings for Custom Retrievals",
+    "venue": "arXiv preprint (arXiv:2310.05380)",
+    "year": 2023,
+    "overview": "论文关注 RAG 等新场景下的一类检索问题：corpus 与 query 可能是异构实体（如自然语言查询检索代码），且要求 top-1/3/5 这类小 k 严格命中，而通用预训练 embedding（如 OpenAI ada）对任务特定相似度“无感知”。作者提出 Adapted Dense Retrieval (ADDER)：在不可微调的黑盒预训练 embedding 之上，学习一个作用在 embedding 上的低秩残差变换，把 embedding 定制到任务特定的相似度概念上。变换以 key-value 字典查找形式（softmax 门控的低秩矩阵）实现，仅添加少量参数、不改动模型权重，用少量 (query, corpus element) 正例对配合全局硬负样本的对比损失训练。实验表明在异构的 NL-code 检索（如 SmCalFlow、Bash）上显著优于通用 embedding baseline，而在语义本就相近的任务（NFCorpus、Conala）上提升有限甚至持平。",
+    "technical_approach": [
+      "问题定义：提出 heterogeneous strict retrieval——query 域 Q 与 corpus 域 C 可能是不同模态/类型（如 NL vs code），且目标是在很小的 k（top-1/3/5）内严格命中相关项；corpus 规模数百到数千，训练集 D 含数百到数千个 (q,c) 对。",
+      "整体方案 ADDER：对黑盒 embedding 函数 E 复合一个变换 Tr:L→L，检索变为 sim(Tr(E(q)), E(c)) 的最近邻；进一步定义 ADDER2：ret_{adr2}=sim(Tr(E(q)), Tr'(E(c)))，即同时对 query 与 corpus 侧施加变换。",
+      "变换形式（残差适配）：Tr(e)=e+f(e,θ)，Tr'(e)=e+f'(e,θ')，即对 embedding 加一个残差扰动；f 采用 key-value 字典查找：f(e,K,V)=softmax(eK^T)V，K、V 为 h×d 矩阵，h<d（典型 16–128），残差落在低维子空间，类 LoRA 思路但作用于 embedding 而非权重。",
+      "参数量与黑盒约束：f 由 2dh 个未知参数 (K,V) 刻画；模型视为黑盒，不访问或修改其内部权重，仅需能调用其 embedding 接口（实验用 OpenAI ada，d=1536）。",
+      "训练目标（全局负样本对比损失）：给定正例对 (q,c)，其余语料元素为负例；最小化正负对上的排序损失 l(Tr(E(q)), Tr'(E(c)), Tr'(E(c-)))。",
+      "硬负样本：批内负样本效果差，故从全语料动态选取与当前（变换后）query 最相似的负例 GlobalNeg(q)=argmax_{c∈Cq-} sim(Tr(E(q)), Tr'(E(c)))，该负例随 Tr/Tr' 更新在每批重新计算。",
+      "训练配置：优化器 Adam，ADDER 初始 lr 1e-3、每 100 epoch 乘 0.5；ADDER2 初始 lr 1e-2、每 50 epoch 乘 0.5；训练 500 epochs；隐藏维度在 64–1536 间调参；数据规模小、可直接在普通机器上训练。",
+      "评测一（经典检索）：在 BEIR 的 SciFact、ArguAna、FiQA、NFCorpus 上对比 OAI baseline，指标 nDCG@1/3/5/10；ADDER/ADDER2 在 SciFact、ArguAna（相似度概念特殊）上提升明显，在 FiQA、NFCorpus（NL-NL 语义相近）基本持平。",
+      "评测二（异构 NL2X）：在 NL2SmCalFlow、NL2Bash、NL2Conala 上把 NL 检索到 code；SmCalFlow 提升巨大，Bash 提升较小，Conala 因 target 语言普及、NL 标注质量高且映射一对多而未提升甚至略降。",
+      "推理阶段：只需对 query embedding 施加学习到的 Tr 后，与预计算好的 corpus embedding 做最近邻相似度检索；ADDER（仅 query 侧）保持 corpus 索引不变，ADDER2 需重算 corpus embedding。"
+    ],
+    "key_terms": [
+      "Adapted Dense Retrieval (ADDER)",
+      "残差适配 Residual Adaptation",
+      "key-value 字典查找 softmax(eK^T)V",
+      "黑盒 embedding Black-box Embedding (OpenAI ada)",
+      "全局硬负样本 Global Negatives",
+      "异构严格检索 Heterogeneous Strict Retrieval"
+    ],
+    "relevance_to_query_side_calibration": "相关：ADDER 的 query-only 变体正是一个作用于冻结黑盒 embedding、只改 query 侧表示的轻量变换（残差 key-value 查找），与本课题“冻结 embedder、已有索引不重建、纠正只发生在 query embedding 侧”的设定吻合，可作为 query-only adapter 的一种参数化设计（低秩残差、softmax 门控字典查找）。它同时提供了全局硬负样本对比损失这一训练目标，值得借鉴。需要注意：其训练依赖真实 (query, corpus element) 标注对而非 synthetic queries；且 ADDER2 会改动 corpus 侧 embedding、需重建索引，与“索引不重建”冲突，故只能取其 query-only 部分。"
+  },
+  {
+    "file": "Coherence-based Query Performance Measures for Dense Retrieval.pdf",
+    "title": "Coherence-based Query Performance Measures for Dense Retrieval",
+    "venue": "ICTIR 2024",
+    "year": 2024,
+    "overview": "论文研究稠密检索场景下的 Query Performance Prediction (QPP)，即在没有相关性标注的情况下预测某查询的检索效果。作者指出传统 QPP 预测器多基于稀疏 TF.IDF 表示或对 BM25 排序建模，而这与单表示稠密检索模型（ANCE、TCT-ColBERT）的表示方式不匹配。为此他们把已有的无监督一致性（coherence）预测器改用稠密文档 embedding 计算，提出 AC-embs、WAND-embs、WD-embs 以及新的 pairRatio/A-pairRatio。在 MS MARCO + TREC DL 2019/2020 上，以 Kendall's τ 衡量，稠密版一致性预测器在 NDCG@10、MRR@10 上常优于评分型（NQC/RSD）和监督型（BERT-QPP）预测器，MAP@100 上则评分型更好。进一步用 sARE 与线性混合模型 (LMM) 分析发现，稠密检索的 QPP 效果显著受 query 类型影响（最多约 35% 的方差可归因于 query 类型），且 NDCG@10 比 MAP@100 对 query 类型更稳健。",
+    "technical_approach": [
+      "任务：post-retrieval 无监督 Query Performance Prediction，目标是在无 relevance judgment 时估计查询对稠密检索排序的有效性；关注单表示稠密检索模型 ANCE 与 TCT-ColBERT（并对比 BM25）。",
+      "稠密一致性预测器（embedding 变体）：把原基于 TF.IDF 的成对相似度矩阵 W 改用文档稠密 embedding φ 的两两内积构成 W_φ，从而得到 AC-embs、WAND-embs、WD-embs。",
+      "AC-embs：将空间自相关（spatial autocorrelation）思想用于 embedding，用相似度矩阵求“扩散分数”，再以 Pearson 相关度量原始分数与扩散分数的关系。",
+      "网络度量：把相似度矩阵视为全连接图（节点=文档、边=相似度），用阈值剪枝后计算加权平均邻居度 WAND 与密度 WD，作为一致性指标。",
+      "新预测器 pairRatio：基于 top-k 文档 embedding 相似度矩阵，计算高位 rank 区域（W_{1..τi}）与低位 rank 区域（W_{τj..k}）平均相似度之比，对比度越大越可能效果好；A-pairRatio 进一步用 query-document 相似度加权调整矩阵 A_{ij}=W_{ij}·(φ_i·θ_q)·(φ_j·θ_q)。",
+      "实验设置：MS MARCO passage 语料，TREC DL 2019（43 查询）/2020（54 查询）；检索系统为 BM25（Terrier）、ANCE、TCT-ColBERT（PyTerrier）；对比 Max、NQC、RSD(uni) 等评分型与 BERT-QPP 等监督型预测器。",
+      "度量：系统有效性用 NDCG@10、MAP@100、MRR@10；QPP 准确度用 Kendall's τ 相关性；对每个预测器在数据集间调参（top-k 取 {5,10,20,50,100,200,500,1000}，pairRatio 另有 τ_i、τ_j 阈值）。",
+      "主要相关性结论：对稠密检索，评分型（NQC/RSD）在 MAP@100 上强，而稠密一致性预测器在 NDCG@10/MRR@10 上更强；把表示从 TF.IDF 换成稠密 embedding 会显著提升一致性预测器（ANCE 在 TREC 2019 7/9 情形、2020 9/9 情形提升）。",
+      "监督对比：BERT-QPP（bi/cross-encoder）在稠密检索上不如无监督预测器；更简单的 top-1(monoT5)（只用 top-1 文档的 monoT5 相关性分数）反而更准，说明 BERT-QPP 本质上只是 top 文档的相关性估计器。",
+      "统计建模：用 scaled Absolute Rank Error (sARE) 与 2 层线性混合模型 (LMM) 分解 sARE 方差，Level 1 为 QPP 预测器差异、Level 2 为 query 类型差异；发现稠密检索 QPP 受 query 类型影响更大（Pseudo-R²₁ 达 ANCE 35%、TCT-ColBERT 23%），而 NDCG@10 比 MAP@100 对 query 类型更不敏感。"
+    ],
+    "key_terms": [
+      "查询性能预测 Query Performance Prediction (QPP)",
+      "一致性预测器 Coherence-based Predictor",
+      "稠密检索 Dense Retrieval (ANCE, TCT-ColBERT)",
+      "pairRatio / A-pairRatio",
+      "scaled Absolute Rank Error (sARE)",
+      "线性混合模型 Linear Mixed Model (LMM)"
+    ],
+    "relevance_to_query_side_calibration": "与 query 侧纠偏不直接相关——它不训练任何 adapter、不改写 query，而是评测/预测已有排序的查询效果。其对本课题的价值在于“监督信号与评测度量”层面：(1) 提供一套无监督、无需 relevance judgment 的查询有效性估计（基于冻结的稠密文档 embedding 与已有排序的一致性指标 AC-embs/pairRatio 等），可用来识别哪些查询可能检索失败、从而作为触发或评价 query 校准的判据；(2) 其对 NDCG@10 与 MAP@100 敏感差异、query 类型对 QPP 影响的分析，可作为本课题选择评测度量与诊断检索误差来源的参考。它本身不涉及 query representation 的纠正，也不使用 synthetic queries 构造监督。"
+  },
+  {
+    "file": "Distribution-Driven Dense Retrieval Modeling Many-to-One Query-Document Relationship.pdf",
+    "title": "Distribution-Driven Dense Retrieval: Modeling Many-to-One Query-Document Relationship",
+    "venue": "AAAI 2025",
+    "year": 2025,
+    "overview": "论文针对 dense retrieval 中“多个不同 query 检索同一篇 document”的多对一关系问题展开研究。已有做法用多个向量表示一篇 document（multi-view），但带来存储开销增大（如 MVR 存储量为单向量方法的 8 倍）、向量坍缩（标注稀疏导致多个向量趋于相同）和检索效率低（需 MaxSim 等交互）三大问题。作者提出 Distribution-Driven Dense Retrieval（DDR）框架：用向量表示 query，用多元高斯分布表示 document，从而在不增加 document 向量个数的前提下刻画多 query 与该 document 的对应关系。为解决分布打分无法直接用 ANN 的效率难题，作者通过理论推导把分布似然打分等价改写为 query 向量、文档均值与协方差之间的点积形式，使其能无缝接入现有 ANN（HNSW/FAISS）。在 MS MARCO、TREC DL 2019/2020 及 BEIR 零样本数据集上的实验表明 DDR 在性能上超过多数单向量与多向量方法，且存储与延迟接近单向量方法。",
+    "technical_approach": [
+      "将 query 用向量、document 用分布来建模多对一关系：query 由 encoder 的 [CLS] 嵌入得到向量 q，document 用 k 维多元高斯 N(μ, Σ) 表示。",
+      "document 分布：均值向量 μ 直接取 document encoder 的 [CLS] 嵌入；协方差采用对角矩阵以降低存储并提升效率，其方差向量 σ² 由对全部 token 隐状态做注意力聚合得到。",
+      "方差向量构造：把隐状态 H 做线性变换得到 Q/K/V，注意力输出取首个向量 h[VAR]，再用 f(x)=1/β·log(1+exp(βx)) 平滑变换保证 σ² 可微且为正。",
+      "相似度计算：不直接用点积，而是用 document 分布在该 query 向量处的概率密度 fd(q) 作为相关性分数 S(d,q)，并取对数提升数值稳定性。",
+      "理论等价改写：把对数似然展开并去掉常数项，得到一个 query 向量、文档均值 μ 与方差 σ² 的二次型表达式，进一步改写成两组 (2k+1) 维向量的点积（query 侧构造 vq，document 侧构造 vd）。",
+      "由于改写后的 vq 与 vd 相互独立，可直接用 HNSW/FAISS 等 ANN 索引全部 vd 向量，实现与单向量方法相当的在线检索效率（query 侧仅需构造一次 vq）。",
+      "训练采用知识蒸馏：以 cross-encoder（ELECTRA 架构）为 teacher 对 (query, passage) 打分，retriever 作为 student 用 KL/交叉熵类损失 L=Σ Pt log(Pt/Ps) 学习 teacher 的概率分布。",
+      "每个 query 的蒸馏文档集 Dq 包含：标注正例、BM25 top-100 负例，以及每个 epoch 由 student 检索的 top-100 难负例。",
+      "推理阶段：document embedding（分布参数 μ、σ²）离线构建并索引到 ANN，线上仅对 query 编码并构造 vq，再做一次点积近邻检索，实现单次高效检索。",
+      "实验在 MS MARCO passage、TREC DL 2019/2020 与 BEIR 零样本（NQ、FiQA、Touché-2020、Climate-FEVER）上进行，并做 β 参数敏感性分析。"
+    ],
+    "key_terms": [
+      "Dense Retrieval",
+      "Many-to-One Query-Document",
+      "多元高斯分布 multivariate Gaussian",
+      "ANN / HNSW",
+      "知识蒸馏 knowledge distillation",
+      "MaxSim"
+    ],
+    "relevance_to_query_side_calibration": "DDR 的核心是把 document 侧建模为分布并改写打分函数，document 表示（μ、σ²）随索引一并离线固定，线上只对 query 侧编码并构造 vq 后做一次点积检索——这非常契合“frozen document embeddings、索引不重建、线上只检索一次”的约束。其把高斯分布似然展开为 query 向量二次型/点积的数学改写，可为 query 侧纠偏提供一种思路：校准 query 表征使它在固定 document 分布下的似然更准。不过本文是在有标注/蒸馏监督下联合训练 encoder，并非冻结 embedding model 的纯 query-only adapter，因此它主要提供“query 侧打分接口 + 分布化文档表示”的启发，而非 query-only 纠偏的具体监督构造。"
+  },
+  {
+    "file": "Effective Contrastive Weighting for Dense Query Expansion.pdf",
+    "title": "Effective Contrastive Weighting for Dense Query Expansion",
+    "venue": "ACL 2023",
+    "year": 2023,
+    "overview": "论文关注用户提交的 query 往往无法充分表达检索意图的问题，研究 dense retrieval 下的伪相关反馈（PRF）查询扩展。已有 ColBERT-PRF 依赖聚类与 IDF 启发式来选择要追加到 query 表示的扩展 embedding，既忽略了 embedding 中编码的上下文，也与语义检索算法本身缺乏直接联系。作者提出 CWPRF（Contrastive Weighting PRF），训练一个基于深度语言模型的对比权重模型，为 PRF passage 中每个 feedback token 预测一个扩展权重，从而有监督地筛选最有用的扩展 embedding。核心思路是构造对比目标：对每个 feedback token，用它与正例文档的最大相似度减去与负例文档（含 in-batch 负例）的最大相似度作为监督信号 t(pi)=MaxSim(pi,d+)−MaxSim(pi,d−)。在 MS MARCO 上以 TREC DL 2019 为验证、TREC 2020 为测试，CWPRF 相比 ColBERT-PRF 等 baseline 取得更高 nDCG@10/MAP，同时在效率上接近最快的 ColBERT-PRF 变体。",
+    "technical_approach": [
+      "整体是三阶段 dense PRF 框架：（1）用原始 query 做初始检索，取 top fp 文档作为伪相关反馈集；（2）CWPRF 模型为各 feedback token 预测扩展权重；（3）用加权扩展 embedding 精炼 query 表示后再检索一次。",
+      "CWPRF 模型结构：在 ColBERT 之上另设一个 BERT 实例，输入为 query token 序列与 PRF token 序列的拼接，输出每个 token 的标量权重 ws = CWPRF([CLS],[Q],q...,[D],p...)，并对权重施加 ReLU 保证非负。",
+      "扩展聚合方式沿用 ColBERT-PRF：把高权重 feedback token 经 ColBERT document encoder 得到的 embedding 追加到原 query embedding 上，整体贡献由超参 β 控制，打分为 s'(q,fe,d)=s(q,d)+β·Σ wsi·MaxSim(fei,ϕd)。",
+      "对比监督目标：对每个 PRF token pi 生成目标 t(pi)=MaxSim(pi,d+)−MaxSim(pi,d−)，即让模型给“在正例文档中更相似、在负例文档中不相似”的 token 更高权重。",
+      "训练数据来自 ⟨q,d+,d−⟩ 三元组，并补充以原 query 检索得到、被假设为相关的 PRF passage，从而让模型在识别有用 token 时考虑上下文。",
+      "引入 in-batch negative（IBN）采样到 query expansion 权重训练中：每样本配 1 个正例与 B−1 个负例，目标改为 t(pi)=MaxSim(pi,d+)−max_j MaxSim(pi,d−_j)，以抑制在负例中也出现的常见/停用词。",
+      "两种训练/推理模式：AAAT 把所有 PRF passage 拼成一个序列（受 512 token 限制）；OAAT 把每个 PRF 文档单独作为序列训练与推理。",
+      "损失为回归式均方误差：AAAT 用 L=1/N·Σ(tpi−wspi)²，OAAT 对每个 PRF 序列分别计算后求和。",
+      "推理阶段：先用一次初始检索得到 PRF 文档，CWPRF 预测权重筛出 top fe 个高权重扩展 embedding，追加后对 ColBERT 再做一次检索输出最终结果。",
+      "实验在 MS MARCO（8.8M passages）上训练，TREC DL 2019（43 query）作验证、TREC 2020（54 query）作测试，报告 nDCG@10/MAP/Recall 及语义匹配比例 SMP，并做 IBN、初始化（uniCOIL）、初始检索来源等消融。"
+    ],
+    "key_terms": [
+      "Pseudo-Relevance Feedback (PRF)",
+      "Dense Query Expansion",
+      "ColBERT / MaxSim",
+      "对比权重 contrastive weighting",
+      "in-batch negatives (IBN)",
+      "nDCG@10"
+    ],
+    "relevance_to_query_side_calibration": "CWPRF 的纠偏完全发生在 query 侧：底层 dense 检索模型与 document embeddings 固定不变，只对 query 表示做扩展与加权，符合“索引不重建、只改 query embedding”的设定。它最有用的是提供了一种“对比监督信号构造”的范式——用正/负文档的 MaxSim 差来定义 token/embedding 的有用性，这与课题想要的“从 query–document ranking 关系稳定定义检索误差的监督”高度一致，可迁移为 query-only adapter 的训练目标。但注意其方案依赖首轮检索得到的 PRF 文档并做二轮检索，属于本项目明确不采纳的 Top-K→PRF→二轮检索路线，因此它更适合作为监督信号设计参考，而非直接采用的推理流程。"
+  },
+  {
+    "file": "GPL Generative Pseudo Labeling for Unsupervised Domain Adaptation of Dense Retrieval.pdf",
+    "title": "GPL: Generative Pseudo Labeling for Unsupervised Domain Adaptation of Dense Retrieval",
+    "venue": "NAACL 2022",
+    "year": 2022,
+    "overview": "论文研究 dense retrieval 在领域迁移下性能严重下降、而多数领域缺乏标注训练数据的问题，提出无监督领域自适应方法 GPL（Generative Pseudo Labeling）。GPL 只需目标领域一个无标注的段落集合，流程为：用预训练 T5 encoder-decoder 为每篇段落生成合成 query，用现有 dense retriever 为新 query 挖掘难负例，再用 cross-encoder 为 (query, positive, negative) 打分得到 margin，最后用 MarginMSE 损失训练 dense retriever。相比只用 in-batch 负例的做法（如 QGen），用 cross-encoder 软标签能同时纠正好 query 与假负例问题，训练更鲁棒。在 BeIR 六个领域数据集上，GPL 较零样本 MS MARCO 模型最高提升 9.3 nDCG@10，较前 SOTA 的 QGen 最高提升 4.5 点；论文还系统研究了六种预训练方法，发现仅 TSDAE 等三种有效，TSDAE 与 GPL 结合可再平均提升 1.4 点。",
+    "technical_approach": [
+      "给定目标领域无标注段落集合，先用公开的 DocT5Query（在 MS MARCO 上训练的 T5 encoder-decoder）为每篇段落生成合成 query（默认每段 3 条，推理用 nucleus sampling，temperature=1.0, k=25, p=0.95）。",
+      "查询生成后，把原始段落作为生成 query 的正例 passage。",
+      "负例挖掘（hard negatives）：用现有 MS MARCO 训练的 dense retriever（msmarco-distilbert-base-v3 / msmarco-MiniLM-L6-v3）为每个生成 query 检索 50 个相似段落作为难负例（dense 检索略优于 BM25）。",
+      "伪标注（pseudo labeling）：用 cross-encoder（ms-marco-MiniLM-L-6-v2）对 (query, positive) 与 (query, negative) 打分，计算 margin δ=CE(Q,P+)−CE(Q,P−)。",
+      "训练目标用 MarginMSE 损失：L=−1/M·Σ|δ̂i−δi|²，其中 δ̂i 为学生 dense retriever 的分数 margin δ̂i=fθ(Qi)ᵀfθ(Pi)−fθ(Qi)ᵀfθ(P−i)，用点积（因 cross-encoder 分数无界）。",
+      "对比既有 QGen 的 MultipleNegativesRanking(MNRL)+in-batch negatives 损失：MNRL 只提供粗粒度相关性，而 MarginMSE 借助强 cross-encoder 软标签能容忍生成质量差的 query（其得分低，不强制拉近）和假负例（得分高，不强制推远），因此更鲁棒。",
+      "数据规模控制：为保证总生成 query 数固定（250K），对小语料提高每段 query 数 qavg.（如 FiQA=5），对大语料下采样（如 Robust04 下采样到 83.3K passages，qavg.=3）。",
+      "主干用 DistilBERT，输入标题+正文拼接，最大长度 350，mean pooling + 点积相似度；GPL 训练 140k 步、batch size 32。",
+      "可与领域自适应预训练结合：先 TSDAE 在目标语料上预训练，再用 MS MARCO MarginMSE 监督训练，最后接 GPL（TSDAE+GPL）取得最佳结果，平均 52.9 nDCG@10。",
+      "推理阶段：训练好的 dense retriever 用单次向量近邻检索（比 BM25+CE reranking 快得多，1M 语料单 query 约 14ms vs 450ms），无需 rerank。"
+    ],
+    "key_terms": [
+      "Generative Pseudo Labeling (GPL)",
+      "合成 query synthetic queries",
+      "hard negative mining",
+      "cross-encoder pseudo labeling",
+      "MarginMSE loss",
+      "unsupervised domain adaptation",
+      "TSDAE"
+    ],
+    "relevance_to_query_side_calibration": "GPL 是“用合成 query 在无标注知识库中构造检索监督”的经典范式，与课题“用 synthetic queries 重构 supervision”的目标直接对应：它展示了如何在无人工 qrels 时自动产生 (query, positive, negative) 训练信号，并用 cross-encoder 软 margin 作为稳定监督，这正是课题想要的误差监督构造方式。其负例挖掘（用现有检索器挖难负例）与伪标注（cross-encoder 软标签）都可为 query-only adapter 提供训练标签。但 GPL 是端到端微调 dense retriever（双塔、含 document encoder），会改变 document 表示并需重建索引；课题要求冻结 document embeddings、索引不重建、只训练 query 侧 adapter，因此需把 GPL 的监督思想“移植”到只更新 query 表征的设定上，而不能直接沿用其训练流程。"
+  },
+  {
+    "file": "Improving Query Representations for Dense Retrieval with Pseudo Relevance Feedback.pdf",
+    "title": "Improving Query Representations for Dense Retrieval with Pseudo Relevance Feedback",
+    "venue": "CIKM 2021",
+    "year": 2021,
+    "overview": "该论文针对稠密检索中查询因过短、歧义而难以精确刻画信息需求的问题，提出 ANCE-PRF。它把稀疏检索中的伪相关反馈（PRF）思想引入稠密检索：先用已有的稠密检索模型 ANCE 检索出 top-k 文档，再用一个 BERT 查询编码器把原查询与这些反馈文档拼接后重新编码，得到更准确的查询向量。模型端到端用相关性标签训练，只学习新的查询编码器，复用 ANCE 的文档嵌入与索引，不重建索引以降低开销。在 MS MARCO、TREC DL 与 DL-HARD 上，ANCE-PRF 一致优于 ANCE 及多种强稠密检索基线（DL-HARD NDCG@10 提升约 9.3%）。分析表明其注意力机制让编码器更多关注反馈文档中的相关、互补信息并抑制无关噪声。",
+    "technical_approach": [
+      "采用双编码器稠密检索框架，查询与文档分别用 BERT 编码为单个 [CLS] 向量，用点积计算匹配分数 f(q,d)=BERT_q(q)·BERT_d(d)。",
+      "初始检索系统为 ANCE，它用异步更新的文档索引进行难负样本采样训练。",
+      "ANCE-PRF 新增一个独立的 PRF 查询编码器 BERT_prf，输入为 [CLS] 查询 [SEP] 文档1 [SEP] ... [SEP] 文档k [SEP]，输出精炼后的查询向量 q_prf，默认 k=3。",
+      "文档编码器与文档嵌入沿用 ANCE 不变，复用其文档索引，不额外维护 PRF 专用索引，因此只新学 q_prf 一个组件。",
+      "训练用标准负对数似然（softmax 对比）损失，正例为相关文档、负例为不相关文档（含难负样本）。",
+      "通过 Transformer 注意力（[CLS] 对各 token 的 attention）学习区分反馈文档中相关与不相关的 token，理想上相关 token 应获得更高注意力权重。",
+      "训练细节：查询编码器用 ANCE FirstP 初始化并继承 ANCE 超参，2 张 RTX 2080 Ti、每 GPU batch 4、梯度累积 8、训练 450K 步，按 MS MARCO dev 的 MRR@10 取最优 checkpoint。",
+      "推理：先用 ANCE 检索 top-k（Faiss IndexFlatIP），把 top-k 喂入 PRF 查询编码器得到 q_prf，再用 q_prf 做第二次 Faiss 最近邻检索得到最终结果，即两阶段检索。",
+      "消融显示 k=1 到 5 均稳定优于 ANCE 且对更深 k 的噪声稳健；k=0（仅额外训练）没有提升。",
+      "该方法可作为即插即用模块集成进任意稠密检索系统。"
+    ],
+    "key_terms": [
+      "伪相关反馈 PRF",
+      "稠密检索 dense retrieval",
+      "查询表示 query representation",
+      "ANCE",
+      "双编码器 dual-encoder",
+      "难负样本采样 hard negative sampling"
+    ],
+    "relevance_to_query_side_calibration": "这篇论文直接操作查询侧：文档编码器、文档嵌入与索引都冻结，只训练一个新的查询编码器，与本课题 index-preserving、只改 query embedding 的设定在精神上一致，可作为 query 侧纠偏有效的强证据。但它的关键机制是线上两阶段检索（先 ANCE 取 top-k，再 PRF 重检索），违反本课题线上只做一次检索的约束；且它依赖有标注相关性标签训练，而非自动/合成的检索监督。因此它对本课题的可用性主要是动机与边界反例，而非可套用的单次检索方案。"
+  },
+  {
+    "file": "Learning Query Encoders Can Be Hard Even When Vector Retrieval Is Geometrically Easy.pdf",
+    "title": "Learning Query Encoders Can Be Hard Even When Vector Retrieval Is Geometrically Easy",
+    "venue": "arXiv preprint (arXiv:2610.02749)",
+    "year": 2026,
+    "overview": "该论文研究向量检索中两个不同的问题：冻结文档索引能支持多高的召回（几何容量），以及学习到的查询编码器能否达到这一上界。作者提出用 ranking SVM 高效估计给定嵌入语料的几何容量下界，并在 BRIGHT、BEIR、LIMIT 的 20 个数据集上发现：几何容量几乎不是瓶颈（多数任务可达 95%+ 期望召回，连轻量编码器都把文档嵌入得足以近乎完美检索），而预训练与微调的查询编码器实际召回常低于 50% 甚至 25%。这表明稠密检索的瓶颈更多在查询侧编码，而非文档几何。进一步给出理论证据：构造一个检索任务，存在一个小型单隐层 ReLU 网络可实现完美召回，但任何统计查询（SQ）学习器要取得优于随机基线 k/n 的召回都需要指数级数量的统计查询，说明查询编码器的可学习性本身可能构成计算障碍。",
+    "technical_approach": [
+      "问题设定为双编码器检索：文档离线嵌入并存入冻结索引 X，查询编码器 E 在推理时把查询映射进共享向量空间，按内积返回 top-k 文档。",
+      "提出几何容量 c_geom(Q;X)：在给定冻结索引 X 与查询分布 Q 下，某个查询嵌入所能达到的最高期望召回，作为所有单向量检索的上界。",
+      "用 ranking SVM 求几何容量下界：某个查询的 gold 集被完美检索，当且仅当存在查询向量把每个 gold 文档排到所有非 gold 文档之上，等价于对成对差值向量 {x_p - x_n} 求分隔超平面，即软间隔 ranking SVM（正则化成对排序损失 + 松弛变量）。",
+      "用 Joachims (2006) 的 cutting-plane 方法求解大量成对约束，避免显式存储全部 pairwise；对每个查询网格搜索惩罚系数 alpha=C/n（C 取 10 到 10^6）。",
+      "容量下界估计 ĉ_geom：对每个查询解出 SVM 查询向量，取最高分 |G(q)| 个文档计算 recall 再平均；可在约 50 万文档的数据集上于 2 到 4 小时完成。",
+      "数据集：LIMIT（合成，50k 文档，每个查询命名恰出现在两个文档中的属性，gold 覆盖 46 个文档的 top-2 子集）、BRIGHT（推理型问答，12 类，7.9k 至 414k 文档）、BEIR（取 7 类）。",
+      "评估模型：单向量模型 DistilBERT（768 维）与 Qwen3-Embedding-4B（2560 维）；对照词法检索 BM25 与多向量 late-interaction 的 GTE-ModernColBERT。",
+      "微调协议：无预设划分时按 70/30 切分查询，用 LoRA rank 16 + AdamW + 多正例 InfoNCE 损失训练 3000 步，超过 20 万文档的语料采样负例。",
+      "实证结论：除 BEIR 的 trec-covid 外几何容量普遍 95%+，而查询编码器常低于 50%/25%，即便 k=100 仍低于几何下界；微调在训练查询上召回很高（BRIGHT 上 DistilBERT/Qwen3 分别 0.957/0.982）但留出查询很低（0.148/0.245），说明泛化失败。",
+      "理论构造：查询为二元串、文档为超立方体顶点、gold 由隐 intent A 的 F2 矩阵乘法（奇偶校验）决定；Lemma 证明存在完美召回的小型 ReLU 网络，主定理证明任何 SQ 学习器达到 recall 至少 k/n+epsilon 需要 2^Omega(P) 次统计查询。"
+    ],
+    "key_terms": [
+      "几何容量 geometric capacity",
+      "查询编码器 query encoder",
+      "ranking SVM",
+      "统计查询模型 statistical query (SQ)",
+      "冻结索引 frozen index",
+      "recall@k"
+    ],
+    "relevance_to_query_side_calibration": "该论文与 query 侧纠偏高度相关且设定吻合：它以冻结文档向量/索引为前提，论证检索瓶颈在查询编码而非文档几何，为本课题为何要做 query representation calibration 提供了有力的实证与理论动机。它提供的工具是一个度量文档索引几何容量上界的 ranking SVM 方法，以及“查询编码器学习可能计算困难”的几何/SQ 分析。但它不给出训练校准器的方法，也未涉及自动构造监督；且其 recall 度量基于完整 gold 集的全监督，与本课题想用 synthetic query 自动构造监督的目标不同。"
+  },
+  {
+    "file": "Search-Adaptor Embedding Customization for Information Retrieval.pdf",
+    "title": "Search-Adaptor: Embedding Customization for Information Retrieval",
+    "venue": "ACL 2024",
+    "year": 2024,
+    "overview": "该论文针对预训练 LLM 嵌入模型无法利用检索特定标注数据（正相关 query-corpus 对）这一局限，提出 Search-Adaptor：一种轻量、参数高效、模型与数据无关的嵌入定制方法。它在固定的 LLM 之上加一个小容量 adapter（带 skip-connection 的残差映射）来修正 query 与 corpus 的嵌入，仅用成对 query-corpus 数据训练。方法引入一个新的可微 ranking loss 并配以 recovery 与 prediction 两个正则项，在小数据场景下缓解过拟合与灾难性遗忘。其最大优势是无需访问 LLM 参数或梯度，可作用于仅提供推理 API 的商业嵌入模型（Google、OpenAI）。在 14 个 BEIR、17 个 MIRACL、多模态 Fashion-200K 与工具检索上均取得一致且显著的提升，例如 Google Embedding API 平均提升超过 5% nDCG@10。",
+    "technical_approach": [
+      "问题设定：给定 query 集与 corpus，正相关关系表示为三元组 (q,c,y)，目标学习打分函数使预测的关系顺序与真值一致。",
+      "用固定的预训练嵌入模型 E 得到 query/corpus 嵌入，学习适应函数 f: R^d 到 R^d，把原始嵌入映射为更利于检索的新嵌入。",
+      "加 skip connection：q_hat = q + f(q)，c_hat = c + f(c)，即只学原嵌入与适应嵌入之间的残差；query 与 corpus 共享同一个 adapter（消融显示分开两个 adapter 会明显变差，强调共享嵌入空间的重要性）。",
+      "ranking loss（核心监督）：对每个 query 遍历 corpus 对 (j,k)，当真值 y_ij > y_ik 时惩罚预测反序，惩罚量正比于真值差 (y_ij - y_ik) 与分数差 log(1 + e^{s_ik - s_ij})，鼓励高真值对应高分。",
+      "recovery 正则：用 L1 惩罚适应后嵌入与原嵌入的偏离，防止适应过远导致遗忘预训练信息。",
+      "prediction 正则：训练一个 query predictor p，用适应后的 corpus 嵌入去预测 query 嵌入，并按相关性 y_ij 加权；不含 query 到 corpus 方向，因为语料通常远长于查询而更难。",
+      "总训练目标：min_{f,p} LRank + alpha*LRec + beta*LPred，alpha、beta 为非负超参（在验证集上从 {0,0.1,1.0} 与 {0,0.01,0.1} 中选）。",
+      "训练效率：ranking loss 朴素需要 NM^2 次计算，因此对每个 query batch 随机下采样 corpus（始终保留与该 batch 正相关的语料）以降低开销。",
+      "推理：丢弃 query predictor，仅用适应函数 f 同时修正 query 与 corpus 嵌入，再用余弦相似度排序得到相关性分数；即推理仍对 corpus 嵌入施加 adapter。",
+      "实验：在 API 模型（OpenAI text-embedding-ada-002、Google gecko/gecko-multilingual）与开源模型（Sentence-T5、GTE-Large、GTR-Large、Condenser）上以 nDCG@10 评估，14 个 BEIR 上 Google API 平均提升 0.0475、OpenAI 平均 0.0349，开源 ST5-Base 平均从 0.4151 升到 0.5141；并扩展到多模态与工具检索。"
+    ],
+    "key_terms": [
+      "embedding customization",
+      "adapter",
+      "ranking loss",
+      "recovery / prediction 正则",
+      "API-based LLM embedding",
+      "zero-shot retrieval"
+    ],
+    "relevance_to_query_side_calibration": "Search-Adaptor 是本课题最接近的嵌入定制框架之一，其残差式 adapter、直接利用正对关系定义的可微 ranking loss、以及防遗忘的正则项都可为 query-only calibrator 的设计提供参考，且它明确支持“不访问底座模型参数/梯度”。但它的关键设计是对 query 与 corpus 施加共享 adapter，推理时同时修正文档嵌入，等价于需要重算文档向量/更新索引，违反本课题“冻结 document embeddings、索引不重建”的约束。要迁移到本课题需只保留 query 侧 adapter、去掉 corpus 嵌入修改，并且其监督仍依赖真实 query-corpus 对，而本课题希望用 synthetic query 自动构造这种监督。"
+  },
+  {
+    "file": "SQUARE Unsupervised Retrieval Adaptation via Synthetic Data.pdf",
+    "title": "SQUARE: Unsupervised Retrieval Adaptation via Synthetic Data",
+    "venue": "Findings of EMNLP 2025",
+    "year": 2025,
+    "overview": "论文针对预训练稠密检索模型在目标任务/语料上 zero-shot 性能下降的问题，提出无监督语料定制方法 SQUARE（Synthetic QUery-based Adaptive REtrieval）。它用 LLM 从语料中每条文档生成“合成查询-答案”对，并借助合成答案在语料内做嵌入相似度检索，既过滤掉答案对文档 grounding 不足的低质量样本，又为同一查询挖掘多个相关文档，从而构造高质量合成 query-document 训练数据。随后用这些合成对（主要配 Search-Adaptor 微调）定制检索模型，全过程不使用任何人工标注的 query-document 对。作者在较新的 MTEB 基准 BRIGHT、LongEmbed、MTEB-Law 上评估，结果显示 SQUARE 在长/短文档设置下都持续优于 zero-shot 及 Promptagator、Document Expansion 等无监督基线；消融表明“基于答案的过滤”与“多相关文档扩展”是主要增益来源，且方法对多种检索器、多种 LLM 与多种微调方式都具有通用性。论文强调推理阶段不增加额外开销，只相当于对 query 做一次嵌入。",
+    "technical_approach": [
+      "输入语料 D={d1,...,dN}，目标是在不改动已有语料索引的前提下，从语料本身自动生成合成数据来定制检索模型，提升语料内检索准确率。",
+      "对每条文档 dk，用同一个通用 instruction prompt 让 LLM 同时生成合成查询 q̂k 及其基于该文档的合成答案 âk，得到三元组 (q̂k, âk, dk)。",
+      "不要求对整条语料生成：语料较大时可只对代表性子集生成（实验中对 >10000 文档的语料随机抽样 10000 篇），据称这足以有效适配并显著提升可扩展性；每篇文档生成 M=3 个问答对。",
+      "过滤阶段：用冻结的预训练嵌入模型 E 计算答案嵌入 E(âk) 与语料中各文档嵌入 E(di) 的相似度 s(â,d)；若 s(âk,dk) 高于 top-K 相似度阈值 ηK(â,D)（K=3），则保留 (q̂k,dk)，从而剔除答案与文档缺乏强 grounding 的低质量合成对。",
+      "多相关文档扩展：对通过过滤的样本，若语料中其他文档 di 与 E(âk) 的相似度不低于 s(âk,dk)，则把 (q̂k,di) 也纳入集合，使一个查询可关联多个相关文档，解决 Promptagator 严格一对一配对的限制，更贴近异构语料的真实检索场景。",
+      "最终得到过滤后的合成 query-answer-document 三元组集合，作为监督数据对检索模型进行（有监督式）微调。",
+      "微调实现：主要用 Search-Adaptor（α=β=0.1）定制冻结的 Gecko-004 稠密检索器；合成数据按 80/20 划训练/验证，按验证检索性能选 checkpoint，训练与验证只用合成数据，held-out 测试集仅用于最终评测。",
+      "方法对微调方式通用：还测试了 LoRA（作用于全部注意力层，rank=4，scaling=8，InfoNCE 温度 0.1，AdamW、lr=5e-5）与 OpenAI cookbook 的单投影矩阵（1024×4096、InfoNCE + L2 归一化），但只有 Search-Adaptor 在所有数据集上稳定优于 zero-shot，作者归因于其适合数据稀缺场景。",
+      "推理阶段：只在编码 query 时应用 Search-Adaptor，文档嵌入与已有索引保持不变、只做一次检索，不引入 HyDE 式多次 LLM 调用/嵌入计算的额外开销（仅一次 query embedding）。",
+      "消融实验：去掉答案过滤或多相关文档扩展都会使 nDCG@10 下降，证实两者是主要增益来源；并且“用答案提供过滤/扩展所需的与文档的关系”是关键设计。"
+    ],
+    "key_terms": [
+      "合成查询-答案对 synthetic query-answer pairs",
+      "基于答案的过滤 grounded filtering",
+      "多相关文档扩展 multi-relevance document expansion",
+      "Search-Adaptor",
+      "无监督语料定制 unsupervised retrieval customization",
+      "BRIGHT benchmark"
+    ],
+    "relevance_to_query_side_calibration": "SQUARE 的监督信号构造完全来自无标注语料：用 LLM 生成合成 query、再用冻结嵌入的答案相似度做过滤与多相关文档挖掘，无需任何 qrels，这与课题“利用无标注知识库自动构造检索监督”的目标高度一致，其合成 query 生成与答案过滤/扩展流程可直接迁移为伪监督信号构造手段。它明确使用冻结嵌入模型做相关性判定（不改文档索引），并且主要微调方式是 Search-Adaptor 这类 query 侧适配器，与课题“冻结 embedding/文档向量、索引不重建、只在 query 侧纠正”的设定契合度较高。需注意的是原文的定制目标是提升语料内检索，并未把“纠正只发生在 query embedding 侧、推理只一次检索”作为显式约束，因此复用时需将其定制机制收敛为轻量 query-only calibration adapter。"
+  },
+  {
+    "file": "UnIte Uncertainty-based Iterative Document Sampling for Domain Adaptation in Information Retrieval.pdf",
+    "title": "UnIte: Uncertainty-based Iterative Document Sampling for Domain Adaptation in Information Retrieval",
+    "venue": "Findings of ACL 2026",
+    "year": 2026,
+    "overview": "论文研究无监督领域自适应（UDA）中的关键瓶颈——在缺乏标注的目标域语料上，应当选择哪些文档来生成伪查询。作者指出已有的多样性采样方法 DUQGen 会过度抽取两类低价值区域：低密度（高 aleatoric uncertainty）的离群/噪声文档与高置信（低 epistemic uncertainty、模型已学会）区域，导致学习信号有限。为此提出 UnIte：先基于仅依赖语料统计的词法 kNN 密度过滤掉高 AU 的噪声文档，再用“模型对高 IDF 领域词的预测偏差”估计 EU 以识别与目标域不对齐、知识缺口大的文档，并在一个迭代的采样-训练循环中每轮重估 EU、动态分配预算。作者在 TREC-COVID、Robust04、TREC-NEWS、Quora、HotpotQA 五个大规模 BEIR 语料（>100k 文档）上评估，小模型 DPR 与大模型 Qwen3-Embedding-4B 上平均分别比 DUQGen 提升 +2.45 与 +3.49 nDCG@10，且用更少的伪查询（平均约 4k）。消融显示去除 EU 采样掉 2.3、再去除 AU 过滤再掉 0.9，并证明不确定性与多样性结合最优、域平均 EU 平台期是有效的无监督早停准则。",
+    "technical_approach": [
+      "问题设定：通过为目标域文档生成伪查询并微调源域检索器来做 UDA；在超过 10 万文档的大语料下，生成器调用次数随语料规模增长而不可行，因此“选哪些文档来生成伪查询”成为决定效用与预算效率的核心瓶颈。",
+      "AU 过滤（数据层面的 aleatoric uncertainty）：用只依赖语料统计、不依赖模型的 BM25 词法 kNN 距离度量密度，D_k(d)=1/(ε+BM25(d,nk))，对距离做 modified z-score 归一化；z(d)>Zthr 的文档被视为低密度离群/噪声（如与领域无关的 off-topic 文档）并从语料中剔除，得到精炼语料 C'，避免负迁移；实验中 k=3、Zthr=1.5，约过滤 5–10% 文档。",
+      "域分布统计预计算：迭代开始前用 token 级 IDF 刻画目标域中哪些词重要（域术语分布）。",
+      "EU 估计（模型层面 epistemic uncertainty）：用模型自身的 MLM head 把文档嵌入 ed 投影到词表空间得到 token 概率 p(t|ed;θt)，对文档 top-k(=1000，约覆盖 90% 概率质量) token 聚合 log IDF(t)−p(t|ed;θt) 得到 EU 分数 U_k(d;θt)，即模型越无法预测高 IDF 领域词，EU 越高，表示文档与目标域不对齐、模型存在知识缺口、更具学习价值。",
+      "迭代采样-训练循环：EU 会随模型适配而变化，因此不做一次性静态选择，而是每轮用更新后的模型 θt 重新估计 EU 并动态重分配采样预算，持续瞄准模型不断变化的知识缺口，避免重复采样已学会区域。",
+      "EU 采样：沿用 DUQGen 的聚类多样性框架，但用 MMR 式联合打分 score(d;θt)=λ·Û(d;θt)+(1−λ)·Ψ(d;θt)（λ=0.5）在每个语义簇内选高 EU 且高多样性的文档，兼顾信息量与主题覆盖。",
+      "重采样惩罚：簇采样权重 w_i=|C_i|/(P_i+ε)（P_i 为历史累计采样量），采样预算 n_i=n·w_i/Σw_j，与已采样量反比，从而逐渐把预算转向欠采样的高 EU 少数簇，防止过采样主导簇。",
+      "早停准则：监控目标域的域平均 EU（用 EMA，α=0.4 平滑），其局部最小对应检索性能峰值；当 EU 达到平台或达到预算上限（5k）时停止。每轮采样 500 文档、最多 10 轮；该方法用约 3–5k 样本即可收敛。",
+      "伪查询生成与微调：用 Llama3-8B-Instruct（temperature 0.8, top-p 0.9）为每篇选中文档生成一个伪查询；bi-encoder 检索器用 InfoNCE 损失微调，负例来自 in-batch 负例与 Contriever top-100 检索中的底部难负例，DPR 训练 lr=2e-5、batch 32 等。",
+      "推理阶段：训练得到适配后的检索器后按标准流程单次检索；UnIte 只作用于离线“选文档-造查询-微调”阶段，不改变线上检索流程。"
+    ],
+    "key_terms": [
+      "Unsupervised Domain Adaptation (UDA)",
+      "aleatoric uncertainty (AU)",
+      "epistemic uncertainty (EU)",
+      "文档采样 document sampling",
+      "迭代采样-训练循环 iterative sampling-training loop",
+      "DUQGen"
+    ],
+    "relevance_to_query_side_calibration": "UnIte 直接攻克课题中“无标注知识库如何自动构造有效检索监督”的关键子问题——为哪些文档生成伪查询最有价值，并给出可复用的、无需人工标注的不确定性度量：AU 用词法 kNN 密度（纯语料统计，模型无关），EU 用模型 MLM 投影下对高 IDF 领域词的预测偏差。“高 EU 优先 + 多样性平衡 + 域平均 EU 平台期早停”的采样思想，对如何从无标注语料挑选文档来构造 query 侧校准的合成监督有直接方法论参考。但需注意其适配目标是微调整个检索器（文档用 encoder 表示、EU 依赖检索器 MLM head 与其参数/表示空间），与课题“冻结 embedding、冻结文档向量、索引不重建、纠正只在 query 侧”的设定存在张力：若直接复用它需要把 EU 估计改为不依赖被冻结检索器参数（例如基于旁路或 query 侧 adapter 估计），否则会与“冻结+只改 query 侧”约束冲突。"
+  }
+]

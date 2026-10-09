@@ -6,4 +6,5 @@ __pycache__/
 /cache/
 /datasets/
 /tmp/
-/Papers/
+/Papers/*
+!/Papers/papers_index.json
